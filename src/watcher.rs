@@ -249,10 +249,14 @@ fn play_sound(path: &Path, _log: &impl Fn(&str)) {
 #[cfg(windows)]
 fn play_sound(path: &Path, _log: &impl Fn(&str)) {
     use std::os::windows::ffi::OsStrExt;
-    use winapi::um::playsoundapi::PlaySoundW;
-    use winapi::um::winuser::SND_FILENAME;
+    use winapi::um::playsoundapi::{PlaySoundW, SND_ASYNC, SND_FILENAME};
 
     let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    // SND_ASYNC (0x0001) so it doesn't block the watcher thread.
-    unsafe { PlaySoundW(wide.as_ptr(), std::ptr::null_mut(), SND_FILENAME | 0x0001) };
+    unsafe {
+        PlaySoundW(
+            wide.as_ptr(),
+            std::ptr::null_mut(),
+            SND_FILENAME | SND_ASYNC,
+        )
+    };
 }
