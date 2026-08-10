@@ -159,7 +159,9 @@ fn validate_fields(state: &AppState) -> Vec<String> {
 // Stream builder (fn ptr — no captures)
 // ---------------------------------------------------------------------------
 
-fn build_watcher_stream(config: &WatcherConfig) -> futures::stream::BoxStream<'static, Message> {
+fn build_watcher_stream(
+    config: &WatcherConfig,
+) -> iced::futures::stream::BoxStream<'static, Message> {
     let running = Arc::new(AtomicBool::new(true));
     let guard = StopGuard(running.clone());
 
@@ -181,7 +183,7 @@ fn build_watcher_stream(config: &WatcherConfig) -> futures::stream::BoxStream<'s
         running,
     );
 
-    use futures::StreamExt;
+    use iced::futures::StreamExt;
     // Guard lives inside the stream — drops only when subscription is cancelled.
     log_rx
         .map(move |s| {
@@ -362,8 +364,8 @@ impl AppState {
 
             Message::LogLine(line) => {
                 self.log.push(line);
-                if self.log.len() > 1000 {
-                    self.log.drain(0..500);
+                if self.log.len() > 200 {
+                    self.log.drain(0..100);
                 }
                 Task::none()
             }

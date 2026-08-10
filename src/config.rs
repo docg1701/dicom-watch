@@ -131,10 +131,10 @@ fn validate_config(config: &Config, exe_dir: &Path) -> Result<(), String> {
     }
 
     // Validate filter mode
-    config.filter.mode()?;
+    let filter_mode = config.filter.mode()?;
 
     // If regex mode, compile to check validity
-    if config.filter.mode()? == FilterMode::Regex {
+    if filter_mode == FilterMode::Regex {
         regex::Regex::new(&config.filter.pattern).map_err(|e| {
             format!(
                 "Invalid regex in filter.pattern:\n  '{}'\n\nError: {}\n\n\

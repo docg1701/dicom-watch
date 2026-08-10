@@ -21,7 +21,7 @@ pub fn start(
     pattern: String,
     sound_enabled: bool,
     sound_file: PathBuf,
-    log_sender: futures::channel::mpsc::UnboundedSender<String>,
+    log_sender: iced::futures::channel::mpsc::UnboundedSender<String>,
     running: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
@@ -156,7 +156,7 @@ pub fn start(
 
                     // Play notification sound.
                     if sound_enabled {
-                        play_sound(&sound_file, &log);
+                        play_sound(&sound_file);
                     }
 
                     log("Done.");
@@ -227,7 +227,7 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<usize, String> {
 
 /// Play an audio file.
 #[cfg(unix)]
-fn play_sound(path: &Path, _log: &impl Fn(&str)) {
+fn play_sound(path: &Path) {
     let path_copy = path.to_path_buf();
     std::thread::spawn(move || {
         let path_str = path_copy.to_string_lossy().to_string();
@@ -247,7 +247,7 @@ fn play_sound(path: &Path, _log: &impl Fn(&str)) {
 }
 
 #[cfg(windows)]
-fn play_sound(path: &Path, _log: &impl Fn(&str)) {
+fn play_sound(path: &Path) {
     use std::os::windows::ffi::OsStrExt;
     use winapi::um::playsoundapi::{PlaySoundW, SND_ASYNC, SND_FILENAME};
 
