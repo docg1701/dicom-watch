@@ -12,6 +12,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+const TITLE: &str = concat!("DicomWatch v", env!("CARGO_PKG_VERSION"));
+
 const BOLD: Font = Font {
     weight: iced::font::Weight::Bold,
     ..Font::DEFAULT
@@ -215,7 +217,7 @@ fn main() -> iced::Result {
         AppState::update,
         AppState::view,
     )
-    .title("DicomWatch")
+    .title(TITLE)
     .subscription(AppState::subscription)
     .window_size((750.0, 700.0))
     .resizable(true)
