@@ -144,11 +144,13 @@ fn validate_fields(state: &AppState) -> Vec<String> {
     if state.sound_enabled {
         let sound_path = resolve_path(&state.sound_file, &state.exe_dir);
         if !sound_path.exists() {
-            errors.push(t!(
-                "error.sound_missing",
-                path = sound_path.display().to_string()
-            )
-            .to_string());
+            errors.push(
+                t!(
+                    "error.sound_missing",
+                    path = sound_path.display().to_string()
+                )
+                .to_string(),
+            );
         }
     }
     errors
@@ -429,8 +431,16 @@ impl AppState {
 
     fn view(&self) -> Element<'_, Message> {
         // State — borrowed &str from the Strs held by AppState.
-        let status_str = if self.watching { "status.watching" } else { "status.idle" };
-        let btn_str = if self.watching { "button.stop" } else { "button.start" };
+        let status_str = if self.watching {
+            "status.watching"
+        } else {
+            "status.idle"
+        };
+        let btn_str = if self.watching {
+            "button.stop"
+        } else {
+            "button.start"
+        };
 
         // ---- Status & actions ----
         let status_color = if self.watching {
@@ -448,10 +458,14 @@ impl AppState {
             .padding([6, 24])
             .on_press(Message::WatchToggled);
 
-        let delete_btn = button(text(tr("button.clear_all")).size(13).shaping(Shaping::Advanced))
-            .padding([6, 24])
-            .style(button::danger)
-            .on_press(Message::DeleteAll);
+        let delete_btn = button(
+            text(tr("button.clear_all"))
+                .size(13)
+                .shaping(Shaping::Advanced),
+        )
+        .padding([6, 24])
+        .style(button::danger)
+        .on_press(Message::DeleteAll);
 
         let locale_btn = button(
             text(if self.locale == "en" { "EN" } else { "PT-BR" })
@@ -484,7 +498,9 @@ impl AppState {
 
         let settings_card = container(
             column![
-                text(tr("field.source_dir")).size(13).shaping(Shaping::Advanced),
+                text(tr("field.source_dir"))
+                    .size(13)
+                    .shaping(Shaping::Advanced),
                 row![
                     text_input(&tr("placeholder.source_dir"), &self.source_dir)
                         .on_input(Message::SourceDirChanged)
@@ -492,12 +508,18 @@ impl AppState {
                         .size(13)
                         .width(Length::Fill),
                     Space::new().width(6),
-                    button(text(browse_text.clone()).size(13).shaping(Shaping::Advanced))
-                        .padding([6, 14])
-                        .on_press(Message::BrowseSourceDir),
+                    button(
+                        text(browse_text.clone())
+                            .size(13)
+                            .shaping(Shaping::Advanced)
+                    )
+                    .padding([6, 14])
+                    .on_press(Message::BrowseSourceDir),
                 ],
                 Space::new().height(6),
-                text(tr("field.dest_dir")).size(13).shaping(Shaping::Advanced),
+                text(tr("field.dest_dir"))
+                    .size(13)
+                    .shaping(Shaping::Advanced),
                 row![
                     text_input(&tr("placeholder.dest_dir"), &self.dest_dir)
                         .on_input(Message::DestDirChanged)
@@ -505,19 +527,27 @@ impl AppState {
                         .size(13)
                         .width(Length::Fill),
                     Space::new().width(6),
-                    button(text(browse_text.clone()).size(13).shaping(Shaping::Advanced))
-                        .padding([6, 14])
-                        .on_press(Message::BrowseDestDir),
+                    button(
+                        text(browse_text.clone())
+                            .size(13)
+                            .shaping(Shaping::Advanced)
+                    )
+                    .padding([6, 14])
+                    .on_press(Message::BrowseDestDir),
                 ],
                 Space::new().height(6),
                 row![
                     column![
-                        text(tr("field.filter_mode")).size(13).shaping(Shaping::Advanced),
+                        text(tr("field.filter_mode"))
+                            .size(13)
+                            .shaping(Shaping::Advanced),
                         mode_pick,
                     ],
                     Space::new().width(8),
                     column![
-                        text(tr("field.pattern")).size(13).shaping(Shaping::Advanced),
+                        text(tr("field.pattern"))
+                            .size(13)
+                            .shaping(Shaping::Advanced),
                         text_input(&tr("placeholder.filter_pattern"), &self.filter_pattern)
                             .on_input(Message::FilterPatternChanged)
                             .padding(6)
