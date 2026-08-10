@@ -15,7 +15,7 @@ use iced::widget::{
 use iced::{Alignment, Element, Font, Length, Subscription, Task};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 
 const TITLE: &str = concat!("DicomWatch v", env!("CARGO_PKG_VERSION"));
 
@@ -42,7 +42,6 @@ struct AppState {
     locale: String,
 
     watching: bool,
-    watcher_stop_flag: Option<Arc<AtomicBool>>,
 
     log: Vec<String>,
     field_errors: Vec<String>,
@@ -94,7 +93,7 @@ struct StopGuard(Arc<AtomicBool>);
 
 impl Drop for StopGuard {
     fn drop(&mut self) {
-        self.0.store(false, Ordering::SeqCst);
+        self.0.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -229,7 +228,6 @@ fn main() -> iced::Result {
                 sound_file: config.sound.file.clone(),
                 locale: config.locale.language.clone(),
                 watching: false,
-                watcher_stop_flag: None,
                 log: Vec::new(),
                 field_errors: Vec::new(),
             }
@@ -274,9 +272,6 @@ impl AppState {
 
             Message::WatchToggled => {
                 if self.watching {
-                    if let Some(flag) = self.watcher_stop_flag.take() {
-                        flag.store(false, Ordering::SeqCst);
-                    }
                     self.watching = false;
                 } else {
                     self.field_errors = validate_fields(self);

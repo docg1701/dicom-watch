@@ -5,6 +5,8 @@ and notifies you — so you focus on reading studies, not managing files.
 
 Supports Linux (X11/Wayland) and Windows 10/11.
 
+![DicomWatch screenshot](assets/screenshot-001.jpg)
+
 ## What it is
 
 DicomWatch monitors a source directory for incoming zip archives (DICOM studies),

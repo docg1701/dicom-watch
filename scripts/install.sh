@@ -35,22 +35,18 @@ EOF
 echo "   .desktop → $APPS_DIR"
 
 # --- Icons (freedesktop hicolor theme) ---
-ICONS_BASE="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
+ICON_DEST="${XDG_DATA_HOME:-$HOME/.local/share}/icons/dicom-watch.png"
 if [ -f "$ICON_SRC" ]; then
-    for size in 16 32 48 256; do
-        d="$ICONS_BASE/${size}x${size}/apps"
-        mkdir -p "$d"
-        cp "$ICON_SRC" "$d/dicom-watch.png"
-    done
-    echo "   icons → $ICONS_BASE"
+    mkdir -p "$(dirname "$ICON_DEST")"
+    cp "$ICON_SRC" "$ICON_DEST"
+    echo "   icon → $ICON_DEST"
+    # Point .desktop directly to the file — no theme lookup
+    sed -i "s|^Icon=.*|Icon=$ICON_DEST|" "$APPS_DIR/dicom-watch.desktop"
 else
     echo "   (no icon.png — using system default)"
 fi
 
 # --- Update caches ---
 update-desktop-database "$APPS_DIR" 2>/dev/null || true
-if command -v gtk-update-icon-cache &>/dev/null; then
-    gtk-update-icon-cache "$ICONS_BASE" 2>/dev/null || true
-fi
 
 echo "==> Done. DicomWatch is now in your application menu."
