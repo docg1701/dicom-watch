@@ -50,6 +50,11 @@ desktop already has.
    ```powershell
    .\dicom-watch.exe
    ```
+5. (Optional) Add to PATH so `dicom-watch` works from any terminal:
+   - Copy the folder path where you extracted the app.
+   - Open Start, type **environment variables**, click **Edit environment variables for your account**.
+   - Under *User variables*, double-click **Path** → **New** → paste the folder path → **OK**.
+   - Restart any open terminals.
 
 ## Usage
 
