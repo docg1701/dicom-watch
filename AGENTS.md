@@ -9,13 +9,13 @@
 cargo build                             # debug build
 cargo run                               # debug build + run (needs config.toml next to binary)
 
-# Lint & format (must pass before push)
+# Lint & format (LOCAL — run before every push)
 cargo fmt                               # auto-format
-cargo fmt --check                       # check formatting (CI)
+cargo fmt --check                       # verify formatting
 cargo clippy                            # lint (warnings)
-cargo clippy -- -D warnings             # strict lint — all warnings = errors (CI)
+cargo clippy -- -D warnings             # strict lint — all warnings = errors
 
-# Test
+# Test (LOCAL)
 cargo test                              # all tests
 cargo test -- --nocapture               # with stdout visible
 
@@ -26,13 +26,15 @@ cargo build --release                   # optimized binary at target/release/dic
 
 ## Full development & release routine
 
-### Day-to-day
+### Day-to-day (everything local)
 
 ```
-edit → cargo fmt → cargo clippy → cargo test → commit → push → PR → merge
-                                                                    │
-                                                          CI: fmt + clippy + test
+edit → cargo fmt → cargo clippy -- -D warnings → cargo test → commit → push → PR → merge
+                                                                              │
+                                                                   CI: cargo fmt --check only
 ```
+
+CI never compiles. clippy and test are LOCAL.
 
 ### Cutting a release
 
@@ -43,14 +45,14 @@ edit → cargo fmt → cargo clippy → cargo test → commit → push → PR �
 4. PR → merge to main
 5. git tag vA.B.C <merge-commit-sha>   # LIGHTWEIGHT — NOT -a, NOT -m
 6. git push origin vA.B.C
-7. CI fires: test → release job creates GitHub Release with categorized changelog
+7. CI fires: fmt check passes → release job auto-creates GitHub Release with categorized changelog
 8. LOCAL: cargo build --release
-9. LOCAL: ./scripts/release.sh vA.B.C  # packages zip + uploads to the release
+9. LOCAL: ./scripts/release.sh vA.B.C  # packages binary + config.toml.example into zip, uploads to the release
 ```
 
-Steps 8-9 happen on your Linux Mint machine (the release binary must be built
-on the target OS). Step 7 creates the release with changelog only (no binary).
-The zip contains `dicom-watch` + `config.toml.example`.
+Steps 8-9 run on your Linux Mint machine. Step 7 is fully automatic — the
+release is created with changelog only (no binary). The zip uploaded in step 9
+contains `dicom-watch` + `config.toml.example`.
 
 ## Project structure
 
@@ -94,13 +96,13 @@ let config = config::load_config(&exe_dir)?;
 let source = config.directories.source.unwrap_or("/tmp");
 ```
 
-## Testing
+## Testing (LOCAL ONLY)
 
 - `#[cfg(test)] mod tests` inline at the bottom of each source file
 - Naming: `test_<function>_<scenario>`
 - Test: config validation paths, regex compilation, path resolution
 - Do NOT test: GUI layout (Iced widgets), sound playback, notify events
-- CI runs `cargo test` on Rust stable, Ubuntu latest
+- `cargo test` runs locally before push
 
 ## Git workflow
 
@@ -113,11 +115,12 @@ let source = config.directories.source.unwrap_or("/tmp");
 
 | Trigger | What runs |
 |---------|-----------|
-| Push / PR to `main` | `cargo fmt --check` → `cargo clippy -- -D warnings` → `cargo test` |
-| Push tag `v*.*.*` | Same tests, then `release` job creates GitHub Release with auto-generated changelog grouped by `feat:`/`fix:`/other |
+| Push / PR to `main` | `cargo fmt --check` (zero compilation) |
+| Push tag `v*.*.*` | `cargo fmt --check`, then `release` job auto-creates GitHub Release with categorized changelog |
 
-The CI never compiles a release binary. Release binaries are built locally
-(`cargo build --release`) and uploaded via `scripts/release.sh`.
+CI never compiles. Never runs clippy. Never runs tests. All of that is local.
+Release binary is built locally (`cargo build --release`) and uploaded via
+`scripts/release.sh`.
 
 ## Version — single source of truth
 
@@ -126,8 +129,8 @@ Never edit version numbers anywhere else.
 
 ## Boundaries
 
-### ✅ Always
-- `cargo fmt --check && cargo clippy -- -D warnings && cargo test` before pushing
+### ✅ Always (LOCAL — before push)
+- `cargo fmt --check && cargo clippy -- -D warnings && cargo test`
 - Commit `Cargo.lock` together with `Cargo.toml` changes
 - Validate config at startup — crash with a clear message, never default-fill
 - Log errors with context (file path, pattern, error message)
