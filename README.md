@@ -46,9 +46,14 @@ desktop already has.
 1. Download the latest `dicom-watch-v*-windows-x86_64.zip` from the [releases page](../../releases).
 2. Extract to a folder (e.g. `C:\DicomWatch`).
 3. Copy `config.toml.example` to `config.toml` and edit paths in Notepad.
-4. Double-click `dicom-watch.exe` or run from PowerShell:
+4. (Optional) Add to PATH for launching from any terminal:
+   - Open **Settings → System → About → Advanced system settings**
+   - Click **Environment Variables**
+   - Under *User variables*, select `Path` → **Edit** → **New** → `C:\DicomWatch`
+   - Click **OK** and restart any open terminals
+5. Double-click `dicom-watch.exe` or run from PowerShell:
    ```powershell
-   .\dicom-watch.exe
+   dicom-watch.exe
    ```
 
 ## Usage
