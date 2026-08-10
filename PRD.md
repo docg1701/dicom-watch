@@ -79,13 +79,24 @@ log_watcher_error = "Watch error: {error}"
 
 `pt-BR.toml` — same keys, translated values.
 
-#### 3. Define i18n module
+#### 3. Initialize i18n at crate root
+
+In `main.rs`, at the top:
+
+```rust
+#[macro_use]
+extern crate rust_i18n;
+
+i18n!("src/i18n");
+```
+
+NOTE: The `i18n!` macro MUST be called at the crate root (`main.rs`), NOT in a separate module.
+It generates the `t!` macro and translation lookup code at compile time.
+
+Define locale constants in `src/i18n.rs`:
 
 ```rust
 // src/i18n.rs
-rust_i18n::i18n!("src/i18n");
-
-pub use rust_i18n::t;
 pub const LOCALES: &[&str] = &["en", "pt-BR"];
 pub const DEFAULT_LOCALE: &str = "en";
 ```
@@ -168,8 +179,8 @@ Load on startup via `rust_i18n::set_locale()` before UI renders.
 |------|--------|
 | `src/i18n/en.toml` | Create — all English strings |
 | `src/i18n/pt-BR.toml` | Create — all pt-BR translations |
-| `src/i18n.rs` | Create — module + re-exports |
-| `src/main.rs` | Modify — add `locale` field, `ToggleLocale` msg, replace all strings |
+| `src/i18n.rs` | Create — locale constants (`LOCALES`, `DEFAULT_LOCALE`) only |
+| `src/main.rs` | Modify — `#[macro_use] extern crate rust_i18n;`, `i18n!()`, add `locale` field, `ToggleLocale` msg, replace all strings |
 | `src/watcher.rs` | Modify — replace raw strings with `t!()` calls |
 | `src/config.rs` | Modify — add `Locale { language }` struct, load/save |
 | `Cargo.toml` | Modify — add `rust-i18n` dependency |
@@ -237,31 +248,39 @@ These must be bundled with the `.exe` in the release zip.
 
 #### Sound playback
 
-Linux: `paplay` / `aplay` (already implemented).
+Linux: `paplay` / `aplay` (already implemented in `src/watcher.rs`).
 
 Windows options:
 
 | Approach | Complexity | Notes |
 |----------|-----------|-------|
-| `winapi` + `PlaySound` | Medium | `winapi::um::playsoundapi::PlaySoundW` |
-| `rodio` | Low | Already in dependencies, cross-platform |
-| Shell `start` | Low | Opens default player, not ideal |
+| `winapi` + `PlaySoundW` | Low | Native Win32, no extra deps beyond `winapi` |
+| Shell `cmd /c start` | Low | Opens default player, not ideal |
 
-**Decision**: Use `rodio` for cross-platform sound. It's already in `Cargo.toml`.
-Replace the current `paplay`/`aplay` calls with `rodio::source::Source::new`.
-If `rodio` causes issues on Windows, fall back to `winapi::PlaySoundW` via `cfg!(windows)`.
+**Decision**: Keep `paplay`/`aplay` on Linux. Use `winapi::PlaySoundW` on Windows.
+No new heavy dependencies — `winapi` is already pulled in by `notify` on Windows.
+
+```toml
+# Cargo.toml — add Windows-only dependency
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["playsoundapi", "winuser"] }
+```
 
 ```rust
 // src/watcher.rs — cross-platform sound
 #[cfg(unix)]
 fn play_sound(path: &Path) {
-    // paplay / aplay fallback (existing code)
+    // existing paplay / aplay code
 }
 
 #[cfg(windows)]
 fn play_sound(path: &Path) {
-    use rodio::{Decoder, OutputStream, Sink};
-    // or: winapi::PlaySoundW
+    use std::os::windows::ffi::OsStrExt;
+    use winapi::um::playsoundapi::PlaySoundW;
+    use winapi::um::winuser::SND_FILENAME;
+
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    unsafe { PlaySoundW(wide.as_ptr(), std::ptr::null_mut(), SND_FILENAME) };
 }
 ```
 
@@ -277,10 +296,13 @@ No code changes needed.
 
 ### Implementation
 
-#### 1. CI workflow for Windows
+#### 1. CI workflow — quality checks only
+
+CI does NOT compile any binary. It only runs quality checks (fmt, clippy, tests).
+Add a Windows job to verify the code at least compiles on Windows:
 
 ```yaml
-# .github/workflows/ci.yml — add Windows job
+# .github/workflows/ci.yml — add Windows quality check
 test-windows:
   runs-on: windows-latest
   steps:
@@ -291,42 +313,27 @@ test-windows:
     - run: cargo test
 ```
 
-#### 2. Release workflow for both platforms
+No release job on CI. All compilation is local, same as v0.4.0.
+The user downloads the release zip, extracts, and runs.
 
-```yaml
-release-linux:
-  runs-on: ubuntu-latest
-  # ... existing release job
+#### 2. Local Windows build (documented for contributors)
 
-release-windows:
-  runs-on: windows-latest
-  steps:
-    - uses: actions/checkout@v5
-    - uses: dtolnay/rust-toolchain@stable
-    - run: cargo build --release
-    - run: cargo run --release --package scripts -- vX.Y.Z  # zip + upload
+```bash
+# On Windows or cross-compiling from Linux:
+cargo build --release
+# Binary: target/release/dicom-watch.exe
 ```
+
+Release zip for Windows is created locally and uploaded to the existing GitHub Release
+(created by CI on tag push, same as Linux).
 
 #### 3. Sound abstraction
 
-Create `src/sound.rs`:
+Keep the existing `play_sound` function in `src/watcher.rs` but make it `pub`
+and platform-aware via `cfg` attributes (as described in the Sound playback section above).
 
-```rust
-use std::path::Path;
-
-pub fn play(path: &Path) {
-    #[cfg(unix)]
-    play_unix(path);
-    #[cfg(windows)]
-    play_windows(path);
-}
-
-#[cfg(unix)]
-fn play_unix(path: &Path) { /* existing paplay/aplay code */ }
-
-#[cfg(windows)]
-fn play_windows(path: &Path) { /* rodio or winapi */ }
-```
+No new `src/sound.rs` module needed — the function stays in `watcher.rs`
+but becomes `pub fn play_sound(path: &Path)` so it can be called from tests if needed.
 
 #### 4. Release script
 
@@ -352,12 +359,11 @@ Update all docs:
 
 | File | Action |
 |------|--------|
-| `.github/workflows/ci.yml` | Modify — add Windows test + release jobs |
-| `src/sound.rs` | Create — platform-agnostic sound module |
-| `src/watcher.rs` | Modify — use `crate::sound::play` instead of inline |
+| `.github/workflows/ci.yml` | Modify — add Windows quality-check job (fmt/clippy/test only, no build) |
+| `src/watcher.rs` | Modify — `play_sound` becomes `pub` + `cfg` for Windows `PlaySoundW` |
 | `scripts/release.sh` | Modify — platform-aware zip naming |
-| `Cargo.toml` | Modify — add `rodio` feature if needed |
-| `README.md` | Modify — dual-platform install |
+| `Cargo.toml` | Modify — add `[target.'cfg(windows)'.dependencies] winapi` |
+| `README.md` | Modify — dual-platform instructions |
 | `AGENTS.md` | Modify — dual-platform build instructions |
 
 ---
@@ -370,9 +376,10 @@ DicomWatch has a professional, high-resolution icon embedded in the binary.
 The icon is visible in:
 - Linux: title bar, taskbar, alt-tab, app menu (Cinnamon, GNOME, KDE)
 - Windows: title bar, taskbar, Start menu, Alt+Tab
-- `.desktop` file for Linux launchers
 
 Icon sourced from the Obsidian icon set (already on this machine).
+The icon is embedded at compile time — no external files needed at runtime.
+No installation: user downloads the release zip, extracts, and runs.
 
 ### Research
 
@@ -496,22 +503,7 @@ for size in 16 32 48 256; do
 done
 ```
 
-#### 3. Linux `.desktop` file
-
-Create `assets/dicom-watch.desktop`:
-```ini
-[Desktop Entry]
-Type=Application
-Name=DicomWatch
-Comment=Watch directory for DICOM zip files
-Exec=dicom-watch
-Icon=dicom-watch
-Categories=Utility;Medical;GTK;
-Terminal=false
-StartupNotify=true
-```
-
-#### 4. Build script for Windows icon
+#### 3. Build script for Windows icon
 
 Create `build.rs`:
 ```rust
@@ -553,51 +545,19 @@ fn main() -> iced::Result {
 }
 ```
 
-Or set it via Task after window creation if compile-time fails.
-
-#### 6. Install script for Linux
-
-Create `scripts/install-linux.sh`:
-```bash
-#!/usr/bin/env bash
-# Installs binary, .desktop file, and icons
-
-PREFIX="${1:-/usr/local}"
-BIN_DIR="$PREFIX/bin"
-APP_DIR="$PREFIX/share/dicom-watch"
-ICON_BASE="$PREFIX/share/icons/hicolor"
-
-install -Dm755 target/release/dicom-watch "$BIN_DIR/dicom-watch"
-install -Dm644 assets/dicom-watch.desktop "$PREFIX/share/applications/dicom-watch.desktop"
-install -Dm644 assets/icon.png "$APP_DIR/icon.png"
-
-for size in 16 32 48 256; do
-    install -Dm644 \
-        "assets/hicolor/${size}x${size}/apps/dicom-watch.png" \
-        "${ICON_BASE}/${size}x${size}/apps/dicom-watch.png"
-done
-
-update-icon-caches "$ICON_BASE"
-```
-
-#### 7. Uninstall script
-
-`scripts/uninstall-linux.sh` — removes all installed files.
+The icon is embedded at compile time — no external files needed at runtime.
+User downloads the release zip, extracts, and runs. No installation.
 
 ### Files to create/modify
 
 | File | Action |
 |------|--------|
-| `assets/icon.png` | Create — 256×256 source icon from Obsidian set |
-| `assets/icon.ico` | Create — multi-resolution Windows icon |
-| `assets/hicolor/` | Create — PNGs at 16/32/48/256 for Linux |
-| `assets/dicom-watch.desktop` | Create — freedesktop launcher entry |
-| `build.rs` | Create — compile Windows `.ico` into `.exe` |
-| `scripts/install-linux.sh` | Create — install binary + icons + desktop file |
-| `scripts/uninstall-linux.sh` | Create — remove installed files |
+| `assets/icon.png` | Create — 256×256 source icon from Obsidian set (repo asset only) |
+| `assets/icon.ico` | Create — multi-resolution Windows icon (repo asset only) |
+| `build.rs` | Create — compile Windows `.ico` into `.exe` via `winres` |
 | `Cargo.toml` | Modify — add `build = "build.rs"`, add `winres` dev-dep |
-| `src/main.rs` | Modify — load icon, pass to window settings |
-| `README.md` | Modify — document icon installation |
+| `src/main.rs` | Modify — embed icon via `include_bytes!`, pass to `window_settings` |
+| `README.md` | Modify — document icon source (Obsidian, MIT) |
 | `AGENTS.md` | Modify — document icon build steps |
 
 ---
@@ -607,5 +567,5 @@ update-icon-caches "$ICON_BASE"
 | Version | Theme | Key Dependencies | Key Deliverables |
 |---------|-------|-----------------|-----------------|
 | v0.5.0 | i18n | `rust-i18n` | Toggle EN↔pt-BR, `src/i18n/*.toml`, all strings externalized |
-| v0.6.0 | Windows | `rodio`, `winapi` (optional) | Cross-compile `.exe`, CI dual-platform, sound on both |
-| v0.7.0 | Icon | `winres`, `imagemagick` | `.ico` + `.png` icon set, `.desktop` file, install script |
+| v0.6.0 | Windows | `winapi` (Windows-only) | Local Windows build, CI quality-check only, `PlaySoundW` on Windows |
+| v0.7.0 | Icon | `winres`, `imagemagick` | `.ico` embedded in `.exe`, `.png` embedded in Linux binary, no install needed |
