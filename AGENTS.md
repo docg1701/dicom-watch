@@ -52,7 +52,7 @@ CI never compiles. clippy and test are LOCAL.
 1. Bump version in Cargo.toml
 2. cargo build                     # sync Cargo.lock
 3. Commit: fix: version bump X.Y.Z -> A.B.C (context)
-4. PR → merge to main
+4. PR → merge to master
 5. git tag vA.B.C <merge-commit-sha>   # LIGHTWEIGHT — NOT -a, NOT -m
 6. git push origin vA.B.C
 7. CI fires: fmt check passes → release job auto-creates GitHub Release with categorized changelog
@@ -126,16 +126,16 @@ let source = config.directories.source.unwrap_or("/tmp");
 
 ## Git workflow
 
-- Branch: `feature/<name>`, `fix/<name>` from `main`
+- Branch: `feature/<name>`, `fix/<name>` from `master`
 - Commits: conventional — `feat:`, `fix:`, `chore:`, `docs:`, `ci:`
-- PR required to merge to `main`
+- PR required to merge to `master`
 - Tag: **lightweight** only — `git tag vX.Y.Z <sha>` (never `-a`, never `-m`)
 
 ## CI (`.github/workflows/ci.yml`)
 
 | Trigger | What runs |
 |---------|-----------|
-| Push / PR to `main` | `cargo fmt --check` (zero compilation) |
+| Push / PR to `master` | `cargo fmt --check` (zero compilation) |
 | Push tag `v*.*.*` | `cargo fmt --check`, then `release` job auto-creates GitHub Release |
 
 CI never compiles. Never runs clippy. Never runs tests. All of that is local.

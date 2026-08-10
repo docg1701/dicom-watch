@@ -11,7 +11,9 @@ Supports Linux (X11/Wayland) and Windows 10/11.
 
 DicomWatch monitors a source directory for incoming zip archives (DICOM studies),
 auto-extracts them to a destination folder, deletes the original archive, and
-plays a notification sound. Built with Iced for a native GTK-like GUI on X11
+plays a notification sound.
+
+Built with Iced for a native GTK-like GUI on X11
 and Wayland. Single binary, no runtime dependencies beyond what your Linux
 desktop already has.
 
