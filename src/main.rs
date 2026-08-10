@@ -2,6 +2,7 @@ mod config;
 mod watcher;
 
 use config::{Config, FilterMode, resolve_path};
+use iced::widget::container as container_mod;
 use iced::widget::{
     Space, button, column, container, pick_list, row, scrollable, text, text_input, toggler,
 };
@@ -311,98 +312,101 @@ impl AppState {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let status_icon = if self.watching { "●" } else { "○" };
-        let status_text = if self.watching { "Watching" } else { "Stopped" };
+        // ---- Status & actions ----
         let status_color = if self.watching {
-            iced::Color::from_rgb(0.2, 0.8, 0.2)
+            iced::Color::from_rgb(0.2, 0.7, 0.2)
         } else {
-            iced::Color::from_rgb(0.6, 0.6, 0.6)
+            iced::Color::from_rgb(0.55, 0.55, 0.55)
+        };
+        let status_text = if self.watching {
+            "● Watching"
+        } else {
+            "○ Idle"
         };
 
-        let status_row = row![
-            text(status_icon).size(16).color(status_color),
-            Space::new().width(6),
-            text(status_text).size(14),
-        ]
-        .align_y(Alignment::Center);
+        let status_badge = text(status_text).size(13).color(status_color);
 
-        let watch_btn_label = if self.watching {
-            "⏹ Stop"
-        } else {
-            "▶ Watch"
-        };
-        let watch_btn = button(text(watch_btn_label).size(14))
-            .padding([8, 20])
+        let watch_btn = button(text(if self.watching { "Stop" } else { "Start" }).size(13))
+            .padding([6, 24])
             .on_press(Message::WatchToggled);
 
-        let delete_btn = button(text("🗑 Delete All").size(14))
-            .padding([8, 20])
+        let delete_btn = button(text("Clear All Files").size(13))
+            .padding([6, 24])
             .style(button::danger)
             .on_press(Message::DeleteAll);
 
-        let buttons_row =
-            row![watch_btn, Space::new().width(10), delete_btn].align_y(Alignment::Center);
+        let actions_row = row![
+            status_badge,
+            Space::new().width(12),
+            watch_btn,
+            Space::new().width(8),
+            delete_btn
+        ]
+        .align_y(Alignment::Center);
 
         // ---- Settings ----
+
         let mode_pick = pick_list(
             vec![FilterMode::Glob, FilterMode::Regex],
             Some(self.filter_mode),
             Message::FilterModeChanged,
         );
 
-        let settings_section = column![
-            text("Settings").size(16),
-            Space::new().height(8),
-            text("Source directory:").size(12),
-            text_input("", &self.source_dir)
-                .on_input(Message::SourceDirChanged)
-                .padding(4)
-                .size(13),
-            Space::new().height(6),
-            text("Destination directory:").size(12),
-            text_input("", &self.dest_dir)
-                .on_input(Message::DestDirChanged)
-                .padding(4)
-                .size(13),
-            Space::new().height(6),
-            row![
-                column![text("Filter mode:").size(12), mode_pick,].width(Length::FillPortion(1)),
-                Space::new().width(10),
-                column![
-                    text("Pattern:").size(12),
-                    text_input("", &self.filter_pattern)
-                        .on_input(Message::FilterPatternChanged)
-                        .padding(4)
-                        .size(13),
+        let settings_card = container(
+            column![
+                text("Source directory").size(13),
+                text_input("/path/to/source", &self.source_dir)
+                    .on_input(Message::SourceDirChanged)
+                    .padding(6)
+                    .size(13),
+                Space::new().height(6),
+                text("Destination directory").size(13),
+                text_input("/path/to/destination", &self.dest_dir)
+                    .on_input(Message::DestDirChanged)
+                    .padding(6)
+                    .size(13),
+                Space::new().height(6),
+                row![
+                    column![text("Filter mode").size(13), mode_pick,].width(Length::FillPortion(2)),
+                    Space::new().width(8),
+                    column![
+                        text("Pattern").size(13),
+                        text_input("*.zip", &self.filter_pattern)
+                            .on_input(Message::FilterPatternChanged)
+                            .padding(6)
+                            .size(13),
+                    ]
+                    .width(Length::FillPortion(3)),
+                ],
+                Space::new().height(6),
+                row![
+                    toggler(self.sound_enabled)
+                        .label("Sound alert")
+                        .on_toggle(Message::SoundEnabledChanged),
+                    Space::new().width(8),
+                    text_input("assets/alarm-001.ogg", &self.sound_file)
+                        .on_input(Message::SoundFileChanged)
+                        .padding(6)
+                        .size(13)
+                        .width(Length::Fill),
                 ]
-                .width(Length::FillPortion(3)),
-            ],
-            Space::new().height(6),
-            row![
-                toggler(self.sound_enabled)
-                    .label("Sound")
-                    .on_toggle(Message::SoundEnabledChanged),
-                Space::new().width(10),
-                text_input("Sound file path", &self.sound_file)
-                    .on_input(Message::SoundFileChanged)
-                    .padding(4)
-                    .size(13)
-                    .width(Length::Fill),
+                .align_y(Alignment::Center),
             ]
-            .align_y(Alignment::Center),
-        ]
-        .spacing(2);
+            .spacing(0),
+        )
+        .padding(14)
+        .style(container_mod::bordered_box);
 
         // ---- Field errors ----
         let errors_list: Element<_> = if self.field_errors.is_empty() {
-            Space::new().width(0).into()
+            Space::new().height(0).into()
         } else {
             let items: Vec<Element<_>> = self
                 .field_errors
                 .iter()
                 .map(|e| {
                     text(e)
-                        .size(12)
+                        .size(13)
                         .color(iced::Color::from_rgb(0.9, 0.2, 0.2))
                         .into()
                 })
@@ -410,39 +414,53 @@ impl AppState {
             column(items).spacing(2).into()
         };
 
-        // ---- Log ----
-        let log_lines: Vec<Element<_>> = self
-            .log
-            .iter()
-            .rev()
-            .take(200)
-            .map(|line| text(line).size(12).into())
-            .collect();
-
-        let log_area = scrollable(column(log_lines).spacing(1).padding(6).width(Length::Fill))
-            .height(Length::Fill);
-
-        let log_header = text("Activity Log").size(16);
+        let log_card = container(scrollable(
+            column(if self.log.is_empty() {
+                vec![
+                    text("Waiting for files...")
+                        .size(12)
+                        .color(iced::Color::from_rgb(0.5, 0.5, 0.5))
+                        .into(),
+                ]
+            } else {
+                self.log
+                    .iter()
+                    .rev()
+                    .take(200)
+                    .map(|line| {
+                        text(line)
+                            .size(12)
+                            .color(iced::Color::from_rgb(0.8, 0.9, 0.8))
+                            .into()
+                    })
+                    .collect()
+            })
+            .spacing(1)
+            .padding(10)
+            .width(Length::Fill),
+        ))
+        .padding(0)
+        .style(terminal_style);
 
         // ---- Layout ----
-        // Single vertical column: status → settings → log
         container(
             column![
-                status_row,
+                actions_row,
                 Space::new().height(6),
-                buttons_row,
-                Space::new().height(8),
                 errors_list,
                 Space::new().height(8),
-                settings_section,
-                Space::new().height(12),
-                log_header,
-                Space::new().height(4),
-                log_area,
+                text("Settings").size(14),
+                Space::new().height(6),
+                settings_card,
+                Space::new().height(10),
+                text("Activity Log").size(14),
+                Space::new().height(6),
+                log_card.height(Length::Fill),
             ]
-            .padding(16)
+            .padding(20)
             .spacing(0),
         )
+        .style(app_bg_style)
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -463,6 +481,33 @@ impl AppState {
         };
 
         iced::Subscription::run_with(config, build_watcher_stream)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Custom styles
+// ---------------------------------------------------------------------------
+
+fn app_bg_style(_theme: &iced::Theme) -> container_mod::Style {
+    container_mod::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgb(
+            0.94, 0.94, 0.96,
+        ))),
+        ..container_mod::Style::default()
+    }
+}
+
+fn terminal_style(_theme: &iced::Theme) -> container_mod::Style {
+    container_mod::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgb(
+            0.12, 0.13, 0.15,
+        ))),
+        border: iced::Border {
+            radius: 6.0.into(),
+            width: 1.0,
+            color: iced::Color::from_rgb(0.25, 0.25, 0.28),
+        },
+        ..container_mod::Style::default()
     }
 }
 
