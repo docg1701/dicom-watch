@@ -18,18 +18,21 @@ desktop already has.
 ### Linux
 
 1. Download the latest `dicom-watch-v*-linux-x86_64.zip` from the [releases page](../../releases).
-2. Extract and place in its own directory:
+2. Extract to a directory:
    ```bash
-   unzip dicom-watch-v0.7.0-linux-x86_64.zip -d ~/dicomwatch
-   cd ~/dicomwatch
-   chmod +x dicom-watch
+   unzip dicom-watch-v0.8.0-linux-x86_64.zip -d ~/dicom-watch
+   cd ~/dicom-watch
    ```
-3. Copy the example config and edit:
+3. (Optional) Install to application menu:
+   ```bash
+   ./install.sh
+   ```
+4. Copy the example config and edit:
    ```bash
    cp config.toml.example config.toml
    nano config.toml
    ```
-4. Run:
+5. Run:
    ```bash
    ./dicom-watch
    ```

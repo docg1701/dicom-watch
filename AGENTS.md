@@ -62,7 +62,7 @@ CI never compiles. clippy and test are LOCAL.
 
 Steps 8-9 run on your Linux Mint machine. Step 7 is fully automatic — the
 release is created with changelog only (no binary). The zip uploaded in step 9
-contains `dicom-watch` + `config.toml.example`.
+contains `dicom-watch` + `install.sh` + `icon.png` + `config.toml.example` + `alarm-001.ogg`.
 
 ## Project structure
 
@@ -76,6 +76,7 @@ locales/
   pt-BR.toml   — Brazilian Portuguese translations
 scripts/
   release.sh   — Local build + package + upload to GitHub Release (Linux)
+  install.sh   — Linux: installs .desktop entry + icon to application menu
 config.toml.example  — Documented template; user copies to config.toml
 docs/
   PRD.md             — Product requirements (v0.5.0 - v0.7.0)
