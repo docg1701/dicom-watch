@@ -204,7 +204,7 @@ fn main() -> iced::Result {
     )
     .title("DicomWatch")
     .subscription(AppState::subscription)
-    .window_size((750.0, 560.0))
+    .window_size((750.0, 700.0))
     .resizable(true)
     .run()
 }
@@ -425,27 +425,23 @@ impl AppState {
         let log_header = text("Activity Log").size(16);
 
         // ---- Layout ----
-        let left_panel = column![
-            status_row,
-            Space::new().height(10),
-            buttons_row,
-            Space::new().height(14),
-            errors_list,
-            Space::new().height(10),
-            settings_section,
-        ]
-        .width(Length::FillPortion(2))
-        .spacing(4);
-
-        let right_panel = column![log_header, Space::new().height(6), log_area]
-            .width(Length::FillPortion(3))
-            .spacing(4)
-            .height(Length::Fill);
-
+        // Single vertical column: status → settings → log
         container(
-            row![left_panel, Space::new().width(16), right_panel]
-                .padding(16)
-                .height(Length::Fill),
+            column![
+                status_row,
+                Space::new().height(6),
+                buttons_row,
+                Space::new().height(8),
+                errors_list,
+                Space::new().height(8),
+                settings_section,
+                Space::new().height(12),
+                log_header,
+                Space::new().height(4),
+                log_area,
+            ]
+            .padding(16)
+            .spacing(0),
         )
         .width(Length::Fill)
         .height(Length::Fill)
