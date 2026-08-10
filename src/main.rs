@@ -143,7 +143,7 @@ fn validate_fields(state: &AppState) -> Vec<String> {
 
 fn build_watcher_stream(config: &WatcherConfig) -> futures::stream::BoxStream<'static, Message> {
     let running = Arc::new(AtomicBool::new(true));
-    let _guard = StopGuard(running.clone());
+    let guard = StopGuard(running.clone());
 
     let (log_tx, log_rx) = iced::futures::channel::mpsc::unbounded::<String>();
 
@@ -164,7 +164,13 @@ fn build_watcher_stream(config: &WatcherConfig) -> futures::stream::BoxStream<'s
     );
 
     use futures::StreamExt;
-    log_rx.map(Message::LogLine).boxed()
+    // Guard lives inside the stream — drops only when subscription is cancelled.
+    log_rx
+        .map(move |s| {
+            let _hold = &guard;
+            Message::LogLine(s)
+        })
+        .boxed()
 }
 
 // ---------------------------------------------------------------------------
