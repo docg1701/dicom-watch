@@ -6,6 +6,19 @@ pub struct Config {
     pub directories: Directories,
     pub filter: Filter,
     pub sound: Sound,
+    #[serde(default = "default_locale")]
+    pub locale: LocaleConfig,
+}
+
+fn default_locale() -> LocaleConfig {
+    LocaleConfig {
+        language: "en".into(),
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LocaleConfig {
+    pub language: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

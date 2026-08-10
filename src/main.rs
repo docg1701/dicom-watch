@@ -1,6 +1,11 @@
 mod config;
 mod watcher;
 
+#[macro_use]
+extern crate rust_i18n;
+
+i18n!("locales");
+
 use config::{Config, FilterMode, resolve_path};
 use iced::widget::container as container_mod;
 use iced::widget::text::Shaping;
@@ -34,6 +39,8 @@ struct AppState {
     sound_enabled: bool,
     sound_file: String,
 
+    locale: String,
+
     watching: bool,
     watcher_stop_flag: Option<Arc<AtomicBool>>,
 
@@ -62,6 +69,7 @@ enum Message {
     SourceDirPicked(Option<std::path::PathBuf>),
     DestDirPicked(Option<std::path::PathBuf>),
     SoundFilePicked(Option<std::path::PathBuf>),
+    ToggleLocale,
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +116,9 @@ fn save_config(state: &AppState) {
             enabled: state.sound_enabled,
             file: state.sound_file.clone(),
         },
+        locale: config::LocaleConfig {
+            language: state.locale.clone(),
+        },
     };
     let toml_str = toml::to_string_pretty(&config).unwrap_or_default();
     if let Err(e) = std::fs::write(&state.config_path, toml_str) {
@@ -119,27 +130,25 @@ fn validate_fields(state: &AppState) -> Vec<String> {
     let mut errors = Vec::new();
     let source = std::path::Path::new(&state.source_dir);
     if !source.exists() || !source.is_dir() {
-        errors.push(format!(
-            "Source directory does not exist: {}",
-            state.source_dir
-        ));
+        errors.push(t!("error.source_missing", path = state.source_dir.as_str()).to_string());
     }
     let dest = std::path::Path::new(&state.dest_dir);
     if !dest.exists() || !dest.is_dir() {
-        errors.push(format!(
-            "Destination directory does not exist: {}",
-            state.dest_dir
-        ));
+        errors.push(t!("error.dest_missing", path = state.dest_dir.as_str()).to_string());
     }
     if state.filter_mode == FilterMode::Regex
         && let Err(e) = regex::Regex::new(&state.filter_pattern)
     {
-        errors.push(format!("Invalid regex: {}", e));
+        errors.push(t!("error.regex_invalid", error = e.to_string()).to_string());
     }
     if state.sound_enabled {
         let sound_path = resolve_path(&state.sound_file, &state.exe_dir);
         if !sound_path.exists() {
-            errors.push(format!("Sound file not found: {}", sound_path.display()));
+            errors.push(t!(
+                "error.sound_missing",
+                path = sound_path.display().to_string()
+            )
+            .to_string());
         }
     }
     errors
@@ -202,6 +211,8 @@ fn main() -> iced::Result {
 
     let config_path = exe_dir.join("config.toml");
 
+    rust_i18n::set_locale(&config.locale.language);
+
     iced::application(
         move || {
             let filter_mode = config.filter.mode().unwrap_or(FilterMode::Glob);
@@ -214,6 +225,7 @@ fn main() -> iced::Result {
                 filter_pattern: config.filter.pattern.clone(),
                 sound_enabled: config.sound.enabled,
                 sound_file: config.sound.file.clone(),
+                locale: config.locale.language.clone(),
                 watching: false,
                 watcher_stop_flag: None,
                 log: Vec::new(),
@@ -231,12 +243,29 @@ fn main() -> iced::Result {
 }
 
 // ---------------------------------------------------------------------------
+// I18n helpers
+// ---------------------------------------------------------------------------
+
+/// Returns the translated value for `key` as an owned `String`.
+fn tr(key: &str) -> String {
+    t!(key).to_string()
+}
+
+// ---------------------------------------------------------------------------
 // AppState impl
 // ---------------------------------------------------------------------------
 
 impl AppState {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::ToggleLocale => {
+                let new = if self.locale == "en" { "pt-BR" } else { "en" };
+                rust_i18n::set_locale(new);
+                self.locale = new.into();
+                save_config(self);
+                Task::none()
+            }
+
             Message::WatchToggled => {
                 if self.watching {
                     if let Some(flag) = self.watcher_stop_flag.take() {
@@ -249,7 +278,7 @@ impl AppState {
                         return Task::none();
                     }
                     self.watching = true;
-                    self.log.push("[Watch] Starting...".into());
+                    self.log.push(tr("log.watching_start"));
                 }
                 Task::none()
             }
@@ -399,46 +428,52 @@ impl AppState {
     }
 
     fn view(&self) -> Element<'_, Message> {
+        // State — borrowed &str from the Strs held by AppState.
+        let status_str = if self.watching { "status.watching" } else { "status.idle" };
+        let btn_str = if self.watching { "button.stop" } else { "button.start" };
+
         // ---- Status & actions ----
         let status_color = if self.watching {
             iced::Color::from_rgb(0.2, 0.7, 0.2)
         } else {
             iced::Color::from_rgb(0.55, 0.55, 0.55)
         };
-        let status_text = if self.watching {
-            "● Watching"
-        } else {
-            "○ Idle"
-        };
 
-        let status_badge = text(status_text)
+        let status_badge = text(tr(status_str))
             .size(13)
             .shaping(Shaping::Advanced)
             .color(status_color);
 
-        let watch_btn = button(
-            text(if self.watching { "Stop" } else { "Start" })
-                .size(13)
-                .shaping(Shaping::Advanced),
-        )
-        .padding([6, 24])
-        .on_press(Message::WatchToggled);
+        let watch_btn = button(text(tr(btn_str)).size(13).shaping(Shaping::Advanced))
+            .padding([6, 24])
+            .on_press(Message::WatchToggled);
 
-        let delete_btn = button(text("Clear All Files").size(13).shaping(Shaping::Advanced))
+        let delete_btn = button(text(tr("button.clear_all")).size(13).shaping(Shaping::Advanced))
             .padding([6, 24])
             .style(button::danger)
             .on_press(Message::DeleteAll);
+
+        let locale_btn = button(
+            text(if self.locale == "en" { "EN" } else { "PT-BR" })
+                .size(13)
+                .shaping(Shaping::Advanced),
+        )
+        .padding([6, 12])
+        .on_press(Message::ToggleLocale);
 
         let actions_row = row![
             status_badge,
             Space::new().width(12),
             watch_btn,
             Space::new().width(8),
-            delete_btn
+            delete_btn,
+            Space::new().width(Length::Fill),
+            locale_btn,
         ]
         .align_y(Alignment::Center);
 
         // ---- Settings ----
+        let browse_text = tr("button.browse");
 
         let mode_pick = pick_list(
             vec![FilterMode::Glob, FilterMode::Regex],
@@ -449,43 +484,41 @@ impl AppState {
 
         let settings_card = container(
             column![
-                text("Source directory").size(13).shaping(Shaping::Advanced),
+                text(tr("field.source_dir")).size(13).shaping(Shaping::Advanced),
                 row![
-                    text_input("/path/to/source", &self.source_dir)
+                    text_input(&tr("placeholder.source_dir"), &self.source_dir)
                         .on_input(Message::SourceDirChanged)
                         .padding(6)
                         .size(13)
                         .width(Length::Fill),
                     Space::new().width(6),
-                    button(text("Browse").size(13).shaping(Shaping::Advanced))
+                    button(text(browse_text.clone()).size(13).shaping(Shaping::Advanced))
                         .padding([6, 14])
                         .on_press(Message::BrowseSourceDir),
                 ],
                 Space::new().height(6),
-                text("Destination directory")
-                    .size(13)
-                    .shaping(Shaping::Advanced),
+                text(tr("field.dest_dir")).size(13).shaping(Shaping::Advanced),
                 row![
-                    text_input("/path/to/destination", &self.dest_dir)
+                    text_input(&tr("placeholder.dest_dir"), &self.dest_dir)
                         .on_input(Message::DestDirChanged)
                         .padding(6)
                         .size(13)
                         .width(Length::Fill),
                     Space::new().width(6),
-                    button(text("Browse").size(13).shaping(Shaping::Advanced))
+                    button(text(browse_text.clone()).size(13).shaping(Shaping::Advanced))
                         .padding([6, 14])
                         .on_press(Message::BrowseDestDir),
                 ],
                 Space::new().height(6),
                 row![
                     column![
-                        text("Filter mode").size(13).shaping(Shaping::Advanced),
+                        text(tr("field.filter_mode")).size(13).shaping(Shaping::Advanced),
                         mode_pick,
                     ],
                     Space::new().width(8),
                     column![
-                        text("Pattern").size(13).shaping(Shaping::Advanced),
-                        text_input("*.zip", &self.filter_pattern)
+                        text(tr("field.pattern")).size(13).shaping(Shaping::Advanced),
+                        text_input(&tr("placeholder.filter_pattern"), &self.filter_pattern)
                             .on_input(Message::FilterPatternChanged)
                             .padding(6)
                             .size(13),
@@ -495,17 +528,17 @@ impl AppState {
                 Space::new().height(6),
                 row![
                     toggler(self.sound_enabled)
-                        .label("Sound alert")
+                        .label(tr("field.sound_alert"))
                         .text_size(13)
                         .on_toggle(Message::SoundEnabledChanged),
                     Space::new().width(8),
-                    text_input("alarm-001.ogg", &self.sound_file)
+                    text_input(&tr("placeholder.sound_file"), &self.sound_file)
                         .on_input(Message::SoundFileChanged)
                         .padding(6)
                         .size(13)
                         .width(Length::Fill),
                     Space::new().width(6),
-                    button(text("Browse").size(13).shaping(Shaping::Advanced))
+                    button(text(browse_text).size(13).shaping(Shaping::Advanced))
                         .padding([6, 14])
                         .on_press(Message::BrowseSoundFile),
                 ]
@@ -538,7 +571,7 @@ impl AppState {
         let log_card = container(scrollable(
             column(if self.log.is_empty() {
                 vec![
-                    text("Waiting for files...")
+                    text(tr("log.waiting"))
                         .size(13)
                         .shaping(Shaping::Advanced)
                         .color(iced::Color::from_rgb(0.5, 0.5, 0.5))
@@ -571,14 +604,14 @@ impl AppState {
                 Space::new().height(6),
                 errors_list,
                 Space::new().height(8),
-                text("Settings")
+                text(tr("section.settings"))
                     .size(14)
                     .font(BOLD)
                     .shaping(Shaping::Advanced),
                 Space::new().height(6),
                 settings_card,
                 Space::new().height(10),
-                text("Activity Log")
+                text(tr("section.activity_log"))
                     .size(14)
                     .font(BOLD)
                     .shaping(Shaping::Advanced),

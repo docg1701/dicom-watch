@@ -1,0 +1,39 @@
+_version = 1
+
+[status]
+watching = "● Watching"
+idle = "○ Idle"
+
+[button]
+start = "Start"
+stop = "Stop"
+clear_all = "Clear All Files"
+browse = "Browse"
+
+[field]
+source_dir = "Source directory"
+dest_dir = "Destination directory"
+filter_mode = "Filter mode"
+pattern = "Pattern"
+sound_alert = "Sound alert"
+
+[placeholder]
+source_dir = "/path/to/source"
+dest_dir = "/path/to/destination"
+filter_pattern = "*.zip"
+sound_file = "alarm-001.ogg"
+
+[section]
+settings = "Settings"
+activity_log = "Activity Log"
+
+[log]
+waiting = "Waiting for files..."
+watching_start = "[Watch] Starting..."
+watcher_stopped = "Watcher stopped."
+
+[error]
+source_missing = "Source directory does not exist: %{path}"
+dest_missing = "Destination directory does not exist: %{path}"
+regex_invalid = "Invalid regex: %{error}"
+sound_missing = "Sound file not found: %{path}"

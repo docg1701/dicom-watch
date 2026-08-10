@@ -1,0 +1,39 @@
+_version = 1
+
+[status]
+watching = "● Monitorando"
+idle = "○ Parado"
+
+[button]
+start = "Iniciar"
+stop = "Parar"
+clear_all = "Limpar Tudo"
+browse = "Procurar"
+
+[field]
+source_dir = "Diretório origem"
+dest_dir = "Diretório destino"
+filter_mode = "Modo de filtro"
+pattern = "Padrão"
+sound_alert = "Alerta sonoro"
+
+[placeholder]
+source_dir = "/caminho/para/origem"
+dest_dir = "/caminho/para/destino"
+filter_pattern = "*.zip"
+sound_file = "alarme-001.ogg"
+
+[section]
+settings = "Configurações"
+activity_log = "Registro de Atividades"
+
+[log]
+waiting = "Aguardando arquivos..."
+watching_start = "[Watch] Iniciando..."
+watcher_stopped = "Monitoramento parado."
+
+[error]
+source_missing = "Diretório origem não existe: %{path}"
+dest_missing = "Diretório destino não existe: %{path}"
+regex_invalid = "Regex inválida: %{error}"
+sound_missing = "Arquivo de som não encontrado: %{path}"

@@ -27,3 +27,7 @@ enabled = true
 # Path to the audio file. OGG, WAV, and MP3 are typically supported by your
 # system's audio player (paplay or aplay).
 file = "alarm-001.ogg"
+
+[locale]
+# UI language: "en" for English, "pt-BR" for Português (Brasil).
+language = "en"
