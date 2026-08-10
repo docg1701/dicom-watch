@@ -24,9 +24,16 @@ echo "==> Binary size: $(du -h "$BIN" | cut -f1)"
 ZIP="dicom-watch-${TAG}-linux-x86_64.zip"
 rm -f "$ZIP"
 
-# Package: binary + config + sound, all at root (flat)
+# Package: binary + install script + icon + config + sound, all at root (flat).
+# chmod +x on install.sh before zipping so permissions are preserved.
 cp "$BIN" /tmp/dicom-watch
-zip -j "$ZIP" /tmp/dicom-watch config.toml.example assets/alarm-001.ogg
+chmod +x scripts/install.sh
+zip -j "$ZIP" \
+    /tmp/dicom-watch \
+    scripts/install.sh \
+    assets/icon.png \
+    config.toml.example \
+    assets/alarm-001.ogg
 rm /tmp/dicom-watch
 
 echo "==> Uploading $ZIP to GitHub Release $TAG..."
