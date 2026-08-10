@@ -3,13 +3,19 @@ mod watcher;
 
 use config::{Config, FilterMode, resolve_path};
 use iced::widget::container as container_mod;
+use iced::widget::text::Shaping;
 use iced::widget::{
     Space, button, column, container, pick_list, row, scrollable, text, text_input, toggler,
 };
-use iced::{Alignment, Element, Length, Subscription};
+use iced::{Alignment, Element, Font, Length, Subscription};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+
+const BOLD: Font = Font {
+    weight: iced::font::Weight::Bold,
+    ..Font::DEFAULT
+};
 
 // ---------------------------------------------------------------------------
 // State
@@ -324,13 +330,20 @@ impl AppState {
             "○ Idle"
         };
 
-        let status_badge = text(status_text).size(13).color(status_color);
+        let status_badge = text(status_text)
+            .size(13)
+            .shaping(Shaping::Advanced)
+            .color(status_color);
 
-        let watch_btn = button(text(if self.watching { "Stop" } else { "Start" }).size(13))
-            .padding([6, 24])
-            .on_press(Message::WatchToggled);
+        let watch_btn = button(
+            text(if self.watching { "Stop" } else { "Start" })
+                .size(13)
+                .shaping(Shaping::Advanced),
+        )
+        .padding([6, 24])
+        .on_press(Message::WatchToggled);
 
-        let delete_btn = button(text("Clear All Files").size(13))
+        let delete_btn = button(text("Clear All Files").size(13).shaping(Shaping::Advanced))
             .padding([6, 24])
             .style(button::danger)
             .on_press(Message::DeleteAll);
@@ -355,23 +368,29 @@ impl AppState {
 
         let settings_card = container(
             column![
-                text("Source directory").size(13),
+                text("Source directory").size(13).shaping(Shaping::Advanced),
                 text_input("/path/to/source", &self.source_dir)
                     .on_input(Message::SourceDirChanged)
                     .padding(6)
                     .size(13),
                 Space::new().height(6),
-                text("Destination directory").size(13),
+                text("Destination directory")
+                    .size(13)
+                    .shaping(Shaping::Advanced),
                 text_input("/path/to/destination", &self.dest_dir)
                     .on_input(Message::DestDirChanged)
                     .padding(6)
                     .size(13),
                 Space::new().height(6),
                 row![
-                    column![text("Filter mode").size(13), mode_pick,].width(Length::FillPortion(2)),
+                    column![
+                        text("Filter mode").size(13).shaping(Shaping::Advanced),
+                        mode_pick,
+                    ]
+                    .width(Length::FillPortion(2)),
                     Space::new().width(8),
                     column![
-                        text("Pattern").size(13),
+                        text("Pattern").size(13).shaping(Shaping::Advanced),
                         text_input("*.zip", &self.filter_pattern)
                             .on_input(Message::FilterPatternChanged)
                             .padding(6)
@@ -383,9 +402,10 @@ impl AppState {
                 row![
                     toggler(self.sound_enabled)
                         .label("Sound alert")
+                        .text_size(13)
                         .on_toggle(Message::SoundEnabledChanged),
                     Space::new().width(8),
-                    text_input("assets/alarm-001.ogg", &self.sound_file)
+                    text_input("alarm-001.ogg", &self.sound_file)
                         .on_input(Message::SoundFileChanged)
                         .padding(6)
                         .size(13)
@@ -408,6 +428,7 @@ impl AppState {
                 .map(|e| {
                     text(e)
                         .size(13)
+                        .shaping(Shaping::Advanced)
                         .color(iced::Color::from_rgb(0.9, 0.2, 0.2))
                         .into()
                 })
@@ -415,11 +436,13 @@ impl AppState {
             column(items).spacing(2).into()
         };
 
+        // ---- Activity Log (terminal style) ----
         let log_card = container(scrollable(
             column(if self.log.is_empty() {
                 vec![
                     text("Waiting for files...")
                         .size(13)
+                        .shaping(Shaping::Advanced)
                         .color(iced::Color::from_rgb(0.5, 0.5, 0.5))
                         .into(),
                 ]
@@ -431,6 +454,7 @@ impl AppState {
                     .map(|line| {
                         text(line)
                             .size(13)
+                            .shaping(Shaping::Advanced)
                             .color(iced::Color::from_rgb(0.8, 0.9, 0.8))
                             .into()
                     })
@@ -450,11 +474,17 @@ impl AppState {
                 Space::new().height(6),
                 errors_list,
                 Space::new().height(8),
-                text("Settings").size(14),
+                text("Settings")
+                    .size(14)
+                    .font(BOLD)
+                    .shaping(Shaping::Advanced),
                 Space::new().height(6),
                 settings_card,
                 Space::new().height(10),
-                text("Activity Log").size(14),
+                text("Activity Log")
+                    .size(14)
+                    .font(BOLD)
+                    .shaping(Shaping::Advanced),
                 Space::new().height(6),
                 log_card.height(Length::Fill),
             ]
