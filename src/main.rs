@@ -350,7 +350,8 @@ impl AppState {
             vec![FilterMode::Glob, FilterMode::Regex],
             Some(self.filter_mode),
             Message::FilterModeChanged,
-        );
+        )
+        .text_size(13);
 
         let settings_card = container(
             column![
@@ -418,7 +419,7 @@ impl AppState {
             column(if self.log.is_empty() {
                 vec![
                     text("Waiting for files...")
-                        .size(12)
+                        .size(13)
                         .color(iced::Color::from_rgb(0.5, 0.5, 0.5))
                         .into(),
                 ]
@@ -429,7 +430,7 @@ impl AppState {
                     .take(200)
                     .map(|line| {
                         text(line)
-                            .size(12)
+                            .size(13)
                             .color(iced::Color::from_rgb(0.8, 0.9, 0.8))
                             .into()
                     })
