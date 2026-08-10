@@ -26,4 +26,4 @@ pattern = "*.zip"
 enabled = true
 # Path to the audio file. OGG, WAV, and MP3 are typically supported by your
 # system's audio player (paplay or aplay).
-file = "assets/alarm-001.ogg"
+file = "alarm-001.ogg"
