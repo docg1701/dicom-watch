@@ -7,7 +7,7 @@ use iced::widget::text::Shaping;
 use iced::widget::{
     Space, button, column, container, pick_list, row, scrollable, text, text_input, toggler,
 };
-use iced::{Alignment, Element, Font, Length, Subscription};
+use iced::{Alignment, Element, Font, Length, Subscription, Task};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -56,6 +56,12 @@ enum Message {
     SoundEnabledChanged(bool),
     SoundFileChanged(String),
     LogLine(String),
+    BrowseSourceDir,
+    BrowseDestDir,
+    BrowseSoundFile,
+    SourceDirPicked(Option<std::path::PathBuf>),
+    DestDirPicked(Option<std::path::PathBuf>),
+    SoundFilePicked(Option<std::path::PathBuf>),
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +235,7 @@ fn main() -> iced::Result {
 // ---------------------------------------------------------------------------
 
 impl AppState {
-    fn update(&mut self, message: Message) {
+    fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::WatchToggled => {
                 if self.watching {
@@ -240,11 +246,12 @@ impl AppState {
                 } else {
                     self.field_errors = validate_fields(self);
                     if !self.field_errors.is_empty() {
-                        return;
+                        return Task::none();
                     }
                     self.watching = true;
                     self.log.push("[Watch] Starting...".into());
                 }
+                Task::none()
             }
 
             Message::DeleteAll => {
@@ -283,37 +290,44 @@ impl AppState {
                         ));
                     }
                 }
+                Task::none()
             }
 
             Message::SourceDirChanged(v) => {
                 self.source_dir = v;
                 self.field_errors = validate_fields(self);
                 save_config(self);
+                Task::none()
             }
             Message::DestDirChanged(v) => {
                 self.dest_dir = v;
                 self.field_errors = validate_fields(self);
                 save_config(self);
+                Task::none()
             }
             Message::FilterModeChanged(mode) => {
                 self.filter_mode = mode;
                 self.field_errors = validate_fields(self);
                 save_config(self);
+                Task::none()
             }
             Message::FilterPatternChanged(v) => {
                 self.filter_pattern = v;
                 self.field_errors = validate_fields(self);
                 save_config(self);
+                Task::none()
             }
             Message::SoundEnabledChanged(v) => {
                 self.sound_enabled = v;
                 self.field_errors = validate_fields(self);
                 save_config(self);
+                Task::none()
             }
             Message::SoundFileChanged(v) => {
                 self.sound_file = v;
                 self.field_errors = validate_fields(self);
                 save_config(self);
+                Task::none()
             }
 
             Message::LogLine(line) => {
@@ -321,7 +335,66 @@ impl AppState {
                 if self.log.len() > 1000 {
                     self.log.drain(0..500);
                 }
+                Task::none()
             }
+
+            Message::BrowseSourceDir => {
+                let dir = self.source_dir.clone();
+                Task::perform(
+                    async move {
+                        rfd::AsyncFileDialog::new()
+                            .set_directory(&dir)
+                            .pick_folder()
+                            .await
+                            .map(|h| h.path().to_path_buf())
+                    },
+                    Message::SourceDirPicked,
+                )
+            }
+            Message::BrowseDestDir => {
+                let dir = self.dest_dir.clone();
+                Task::perform(
+                    async move {
+                        rfd::AsyncFileDialog::new()
+                            .set_directory(&dir)
+                            .pick_folder()
+                            .await
+                            .map(|h| h.path().to_path_buf())
+                    },
+                    Message::DestDirPicked,
+                )
+            }
+            Message::BrowseSoundFile => Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .add_filter("Audio", &["ogg", "wav", "mp3", "flac"])
+                        .pick_file()
+                        .await
+                        .map(|h| h.path().to_path_buf())
+                },
+                Message::SoundFilePicked,
+            ),
+            Message::SourceDirPicked(Some(path)) => {
+                self.source_dir = path.to_string_lossy().into_owned();
+                self.field_errors = validate_fields(self);
+                save_config(self);
+                Task::none()
+            }
+            Message::SourceDirPicked(None) => Task::none(),
+            Message::DestDirPicked(Some(path)) => {
+                self.dest_dir = path.to_string_lossy().into_owned();
+                self.field_errors = validate_fields(self);
+                save_config(self);
+                Task::none()
+            }
+            Message::DestDirPicked(None) => Task::none(),
+            Message::SoundFilePicked(Some(path)) => {
+                self.sound_file = path.to_string_lossy().into_owned();
+                self.field_errors = validate_fields(self);
+                save_config(self);
+                Task::none()
+            }
+            Message::SoundFilePicked(None) => Task::none(),
         }
     }
 
@@ -377,25 +450,38 @@ impl AppState {
         let settings_card = container(
             column![
                 text("Source directory").size(13).shaping(Shaping::Advanced),
-                text_input("/path/to/source", &self.source_dir)
-                    .on_input(Message::SourceDirChanged)
-                    .padding(6)
-                    .size(13),
+                row![
+                    text_input("/path/to/source", &self.source_dir)
+                        .on_input(Message::SourceDirChanged)
+                        .padding(6)
+                        .size(13)
+                        .width(Length::Fill),
+                    Space::new().width(6),
+                    button(text("Browse").size(13).shaping(Shaping::Advanced))
+                        .padding([6, 14])
+                        .on_press(Message::BrowseSourceDir),
+                ],
                 Space::new().height(6),
                 text("Destination directory")
                     .size(13)
                     .shaping(Shaping::Advanced),
-                text_input("/path/to/destination", &self.dest_dir)
-                    .on_input(Message::DestDirChanged)
-                    .padding(6)
-                    .size(13),
+                row![
+                    text_input("/path/to/destination", &self.dest_dir)
+                        .on_input(Message::DestDirChanged)
+                        .padding(6)
+                        .size(13)
+                        .width(Length::Fill),
+                    Space::new().width(6),
+                    button(text("Browse").size(13).shaping(Shaping::Advanced))
+                        .padding([6, 14])
+                        .on_press(Message::BrowseDestDir),
+                ],
                 Space::new().height(6),
                 row![
                     column![
                         text("Filter mode").size(13).shaping(Shaping::Advanced),
                         mode_pick,
-                    ]
-                    .width(Length::FillPortion(2)),
+                    ],
                     Space::new().width(8),
                     column![
                         text("Pattern").size(13).shaping(Shaping::Advanced),
@@ -404,7 +490,7 @@ impl AppState {
                             .padding(6)
                             .size(13),
                     ]
-                    .width(Length::FillPortion(3)),
+                    .width(Length::Fill),
                 ],
                 Space::new().height(6),
                 row![
@@ -418,6 +504,10 @@ impl AppState {
                         .padding(6)
                         .size(13)
                         .width(Length::Fill),
+                    Space::new().width(6),
+                    button(text("Browse").size(13).shaping(Shaping::Advanced))
+                        .padding([6, 14])
+                        .on_press(Message::BrowseSoundFile),
                 ]
                 .align_y(Alignment::Center),
             ]

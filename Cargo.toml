@@ -1,6 +1,6 @@
 [package]
 name = "dicom-watch"
-version = "0.3.6"
+version = "0.4.0"
 edition = "2024"
 
 [dependencies]
@@ -13,6 +13,7 @@ regex = "1"
 glob = "0.3"
 chrono = "0.4"
 futures = "0.3"
+rfd = "0.17.2"
 
 [profile.release]
 opt-level = "s"
