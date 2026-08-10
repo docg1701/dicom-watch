@@ -134,12 +134,16 @@ let source = config.directories.source.unwrap_or("/tmp");
 
 | Trigger | What runs |
 |---------|-----------|
-| Push / PR to `main` | Ubuntu: `cargo fmt --check` |
-| Push / PR to `main` | Windows: `cargo fmt --check`, `cargo clippy`, `cargo test` |
-| Push tag `v*.*.*` | Ubuntu `cargo fmt --check`, then `release` job auto-creates GitHub Release |
+| Push / PR to `main` | `cargo fmt --check` (zero compilation) |
+| Push tag `v*.*.*` | `cargo fmt --check`, then `release` job auto-creates GitHub Release |
 
-CI never compiles for release. Never runs clippy or test on Linux (compilation time).
-Windows runs clippy + test to catch cfg-gated code paths (winapi, sound).
+CI never compiles. Never runs clippy. Never runs tests. All of that is local.
+Linting and testing are mandatory locally before every push:
+
+```bash
+cargo fmt --check && cargo clippy -- -D warnings && cargo test
+```
+
 Release binary is built locally (`cargo build --release`) and uploaded via
 `scripts/release.sh`.
 
