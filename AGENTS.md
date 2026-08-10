@@ -5,7 +5,7 @@
 ## Commands
 
 ```bash
-# Development
+# Development (Linux or Windows)
 cargo build                             # debug build
 cargo run                               # debug build + run (needs config.toml next to binary)
 
@@ -21,7 +21,17 @@ cargo test -- --nocapture               # with stdout visible
 
 # Release (LOCAL — binary compiled here, uploaded to existing GitHub Release)
 cargo build --release                   # optimized binary at target/release/dicom-watch
-./scripts/release.sh vX.Y.Z             # package + upload to GitHub Release (requires gh CLI)
+./scripts/release.sh vX.Y.Z             # Linux: package + upload to GitHub Release (requires gh CLI)
+```
+
+### Windows-specific
+
+On Windows, build locally and package manually:
+```powershell
+cargo build --release
+# Binary at target\release\dicom-watch.exe
+# Create zip containing dicom-watch.exe + config.toml.example + alarm-001.ogg
+# Upload via gh release upload vX.Y.Z dicom-watch-vX.Y.Z-windows-x86_64.zip
 ```
 
 ## Full development & release routine
@@ -61,11 +71,20 @@ src/
   main.rs      — Iced GUI: AppState, Message, update(), view(), subscription()
   watcher.rs   — Background thread: notify watcher, zip extraction, sound
   config.rs    — Config load/validate from config.toml, FilterMode, path resolution
+locales/
+  en.toml      — English translations
+  pt-BR.toml   — Brazilian Portuguese translations
 scripts/
-  release.sh   — Local build + package + upload to GitHub Release
+  release.sh   — Local build + package + upload to GitHub Release (Linux)
 config.toml.example  — Documented template; user copies to config.toml
-prd.md               — Product requirements (human reference)
-regex-guide.md       — User-facing regex documentation
+docs/
+  PRD.md             — Product requirements (v0.5.0 - v0.7.0)
+  ROADMAP.md         — Future milestones
+  regex-guide.md     — User-facing regex documentation
+build.rs             — Windows: embeds icon.ico into .exe via winres
+assets/
+  icon.png           — App icon (256×256, embedded at compile time)
+  icon.ico           — Multi-resolution Windows icon (16/32/48/256)
 ```
 
 `main.rs` owns the UI state machine. `watcher.rs` owns filesystem I/O.
@@ -115,10 +134,12 @@ let source = config.directories.source.unwrap_or("/tmp");
 
 | Trigger | What runs |
 |---------|-----------|
-| Push / PR to `main` | `cargo fmt --check` (zero compilation) |
-| Push tag `v*.*.*` | `cargo fmt --check`, then `release` job auto-creates GitHub Release with categorized changelog |
+| Push / PR to `main` | Ubuntu: `cargo fmt --check` |
+| Push / PR to `main` | Windows: `cargo fmt --check`, `cargo clippy`, `cargo test` |
+| Push tag `v*.*.*` | Ubuntu `cargo fmt --check`, then `release` job auto-creates GitHub Release |
 
-CI never compiles. Never runs clippy. Never runs tests. All of that is local.
+CI never compiles for release. Never runs clippy or test on Linux (compilation time).
+Windows runs clippy + test to catch cfg-gated code paths (winapi, sound).
 Release binary is built locally (`cargo build --release`) and uploaded via
 `scripts/release.sh`.
 

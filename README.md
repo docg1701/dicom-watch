@@ -1,7 +1,9 @@
 # DicomWatch
 
-A Linux desktop app that watches a directory for new zip files, extracts them,
+A cross-platform desktop app that watches a directory for new zip files, extracts them,
 and notifies you — so you focus on reading studies, not managing files.
+
+Supports Linux (X11/Wayland) and Windows 10/11.
 
 ## What it is
 
@@ -13,22 +15,33 @@ desktop already has.
 
 ## Install
 
-1. Download `dicom-watch` from the [releases page](../../releases).
-2. Place it in its own directory and make it executable:
+### Linux
+
+1. Download the latest `dicom-watch-v*-linux-x86_64.zip` from the [releases page](../../releases).
+2. Extract and place in its own directory:
    ```bash
-   mkdir -p ~/dicomwatch
-   mv dicom-watch ~/dicomwatch/
+   unzip dicom-watch-v0.7.0-linux-x86_64.zip -d ~/dicomwatch
    cd ~/dicomwatch
    chmod +x dicom-watch
    ```
-3. Copy and edit the configuration:
+3. Copy the example config and edit:
    ```bash
-   cp /path/to/config.toml.example config.toml
+   cp config.toml.example config.toml
    nano config.toml
    ```
 4. Run:
    ```bash
    ./dicom-watch
+   ```
+
+### Windows
+
+1. Download the latest `dicom-watch-v*-windows-x86_64.zip` from the [releases page](../../releases).
+2. Extract to a folder (e.g. `C:\DicomWatch`).
+3. Copy `config.toml.example` to `config.toml` and edit paths in Notepad.
+4. Double-click `dicom-watch.exe` or run from PowerShell:
+   ```powershell
+   .\dicom-watch.exe
    ```
 
 ## Usage
@@ -70,7 +83,7 @@ file = "/home/user/sounds/notification.ogg"
 Validation errors at startup are explicit — missing directories, invalid regex,
 sound file not found — pointing to the exact field to fix.
 
-For regex mode, see [`regex-guide.md`](regex-guide.md).
+For regex mode, see [`docs/regex-guide.md`](docs/regex-guide.md).
 
 ## Build from source
 
@@ -80,7 +93,11 @@ sudo apt install libx11-dev libwayland-dev libxkbcommon-dev
 
 # Build
 cargo build --release
+# Binary: target/release/dicom-watch (Linux) or target/release/dicom-watch.exe (Windows)
 ```
+
+Windows builds also require the [MSVC toolchain](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+or [mingw-w64](https://www.mingw-w64.org/).
 
 ## License
 
