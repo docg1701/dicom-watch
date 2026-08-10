@@ -26,10 +26,26 @@ cargo build --release                   # optimized binary at target/release/dic
 
 ### Windows-specific
 
-On Windows, build locally and package manually:
-```powershell
+Cross-compile from Linux or build on a Windows machine:
+
+```bash
+# From Linux (requires mingw-w64 + Rust target):
+rustup target add x86_64-pc-windows-gnu
+cargo build --release --target x86_64-pc-windows-gnu
+# Binary at target/x86_64-pc-windows-gnu/release/dicom-watch.exe
+
+# Or on Windows:
 cargo build --release
 # Binary at target\release\dicom-watch.exe
+```
+
+Package and upload (Linux):
+```bash
+./scripts/release-windows.sh vX.Y.Z
+```
+
+Manual packaging (Windows):
+```powershell
 # Create zip containing dicom-watch.exe + config.toml.example + alarm-001.ogg
 # Upload via gh release upload vX.Y.Z dicom-watch-vX.Y.Z-windows-x86_64.zip
 ```
@@ -57,12 +73,19 @@ CI never compiles. clippy and test are LOCAL.
 6. git push origin vA.B.C
 7. CI fires: fmt check passes → release job auto-creates GitHub Release with categorized changelog
 8. LOCAL: cargo build --release
-9. LOCAL: ./scripts/release.sh vA.B.C  # packages binary + config.toml.example into zip, uploads to the release
+9. LOCAL: ./scripts/release.sh vA.B.C          # Linux zip → upload
+10. LOCAL: ./scripts/release-windows.sh vA.B.C  # Windows zip → upload (cross-compile or VM)
 ```
 
-Steps 8-9 run on your Linux Mint machine. Step 7 is fully automatic — the
-release is created with changelog only (no binary). The zip uploaded in step 9
-contains `dicom-watch` + `install.sh` + `icon.png` + `config.toml.example` + `alarm-001.ogg`.
+**Steps 8-10 are MANDATORY.** Every release MUST have both
+`dicom-watch-vX.Y.Z-linux-x86_64.zip` and `dicom-watch-vX.Y.Z-windows-x86_64.zip`
+as GitHub Release assets. A release is incomplete until both are uploaded.
+
+Steps 8-10 run on your Linux Mint machine. Step 7 is fully automatic — the
+release is created with changelog only (no binaries).
+
+Linux zip contains: `dicom-watch` + `install.sh` + `icon.png` + `config.toml.example` + `alarm-001.ogg`.
+Windows zip contains: `dicom-watch.exe` + `config.toml.example` + `alarm-001.ogg`.
 
 ## Project structure
 
@@ -160,6 +183,7 @@ Never edit version numbers anywhere else.
 - Commit `Cargo.lock` together with `Cargo.toml` changes
 - Validate config at startup — crash with a clear message, never default-fill
 - Log errors with context (file path, pattern, error message)
+- **Every release MUST have both Linux AND Windows zips uploaded to GitHub Release assets**
 
 ### ⚠️ Ask first
 - Adding a dependency to `Cargo.toml`
