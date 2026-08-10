@@ -1,14 +1,14 @@
 mod config;
 mod watcher;
 
-use config::{resolve_path, Config, FilterMode};
+use config::{Config, FilterMode, resolve_path};
 use iced::widget::{
-    button, column, container, pick_list, row, scrollable, text, text_input, toggler, Space,
+    Space, button, column, container, pick_list, row, scrollable, text, text_input, toggler,
 };
 use iced::{Alignment, Element, Length, Subscription};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // ---------------------------------------------------------------------------
 // State
@@ -116,10 +116,10 @@ fn validate_fields(state: &AppState) -> Vec<String> {
             state.dest_dir
         ));
     }
-    if state.filter_mode == FilterMode::Regex {
-        if let Err(e) = regex::Regex::new(&state.filter_pattern) {
-            errors.push(format!("Invalid regex: {}", e));
-        }
+    if state.filter_mode == FilterMode::Regex
+        && let Err(e) = regex::Regex::new(&state.filter_pattern)
+    {
+        errors.push(format!("Invalid regex: {}", e));
     }
     if state.sound_enabled {
         let sound_path = resolve_path(&state.sound_file, &state.exe_dir);
@@ -134,7 +134,7 @@ fn validate_fields(state: &AppState) -> Vec<String> {
 // Stream builder (fn ptr — no captures)
 // ---------------------------------------------------------------------------
 
-fn build_watcher_stream(config: &WatcherConfig) -> impl iced::futures::Stream<Item = Message> {
+fn build_watcher_stream(config: &WatcherConfig) -> futures::stream::BoxStream<'static, Message> {
     let running = Arc::new(AtomicBool::new(true));
     let _guard = StopGuard(running.clone());
 
@@ -156,7 +156,8 @@ fn build_watcher_stream(config: &WatcherConfig) -> impl iced::futures::Stream<It
         running,
     );
 
-    iced::futures::StreamExt::map(log_rx, Message::LogLine)
+    use futures::StreamExt;
+    log_rx.map(Message::LogLine).boxed()
 }
 
 // ---------------------------------------------------------------------------

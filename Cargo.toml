@@ -1,7 +1,7 @@
 [package]
 name = "dicom-watch"
-version = "0.1.0"
-edition = "2021"
+version = "0.2.0"
+edition = "2024"
 
 [dependencies]
 iced = { version = "0.14", default-features = false, features = ["wgpu", "image", "svg", "x11", "wayland", "thread-pool"] }

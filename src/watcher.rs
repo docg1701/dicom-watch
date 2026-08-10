@@ -3,8 +3,8 @@ use chrono::Local;
 use notify::{EventKind, RecursiveMode, Watcher};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -208,16 +208,16 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<usize, String> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if let Some(mode) = entry.unix_mode() {
-                if let Ok(meta) = fs::metadata(&outpath) {
-                    let mut perms = meta.permissions();
-                    if mode & 0o111 != 0 {
-                        perms.set_mode(0o755);
-                    } else {
-                        perms.set_mode(0o644);
-                    }
-                    let _ = fs::set_permissions(&outpath, perms);
+            if let Some(mode) = entry.unix_mode()
+                && let Ok(meta) = fs::metadata(&outpath)
+            {
+                let mut perms = meta.permissions();
+                if mode & 0o111 != 0 {
+                    perms.set_mode(0o755);
+                } else {
+                    perms.set_mode(0o644);
                 }
+                let _ = fs::set_permissions(&outpath, perms);
             }
         }
     }
