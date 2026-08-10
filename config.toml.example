@@ -1,0 +1,29 @@
+# Example configuration for DicomWatch
+#
+# Copy this file to `config.toml` in the same directory as the dicom-watch
+# binary and edit the values below.
+#
+# All paths can be absolute or relative. Relative paths are resolved against
+# the directory containing the dicom-watch executable.
+
+[directories]
+# Directory monitored for new zip files.
+source = "/home/user/Downloads"
+# Directory where zip contents are extracted to.
+destination = "/home/user/dicom/studies"
+
+[filter]
+# Matching mode: "glob" for simple wildcards, "regex" for regular expressions.
+# See regex-guide.md for details on regex mode.
+mode = "glob"
+# Pattern to match filenames against.
+# Glob example: "*.zip" matches any .zip file.
+# Regex example: "^[A-Z]+_[0-9-]+\\.zip$" matches names like "CT_2024-01-01.zip"
+pattern = "*.zip"
+
+[sound]
+# Whether to play a notification sound after each successful extraction.
+enabled = true
+# Path to the audio file. OGG, WAV, and MP3 are typically supported by your
+# system's audio player (paplay or aplay).
+file = "/home/user/sounds/notification.ogg"
