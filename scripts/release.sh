@@ -23,7 +23,12 @@ echo "==> Binary size: $(du -h "$BIN" | cut -f1)"
 
 ZIP="dicom-watch-${TAG}-linux-x86_64.zip"
 rm -f "$ZIP"
-zip -j "$ZIP" "$BIN" config.toml.example
+
+# Package: binary + config at root, assets/ directory preserved
+cp "$BIN" /tmp/dicom-watch-rel
+zip -j "$ZIP" /tmp/dicom-watch-rel config.toml.example
+zip -r "$ZIP" assets/
+rm /tmp/dicom-watch-rel
 
 echo "==> Uploading $ZIP to GitHub Release $TAG..."
 gh release upload "$TAG" "$ZIP" --clobber
