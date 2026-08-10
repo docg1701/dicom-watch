@@ -453,10 +453,9 @@ impl AppState {
                         .into(),
                 ]
             } else {
-                self.log
+                let start = self.log.len().saturating_sub(200);
+                self.log[start..]
                     .iter()
-                    .rev()
-                    .take(200)
                     .map(|line| {
                         text(line)
                             .size(13)
