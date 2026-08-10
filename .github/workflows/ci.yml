@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: System deps (Iced)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libx11-dev libwayland-dev libxkbcommon-dev
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy (strict)
+        run: cargo clippy -- -D warnings
+
+      - name: Run tests
+        run: cargo test
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes and create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+
+          git fetch --tags --force 2>/dev/null || true
+
+          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "${{ github.ref_name }}" | head -1 || true)
+
+          # Tagged commit subject (lightweight tag) → release subtitle
+          SUBTITLE=$(git tag -l --format='%(contents)' "${{ github.ref_name }}" 2>/dev/null | head -1 || true)
+          if [ -z "$SUBTITLE" ]; then
+            TITLE="${{ github.ref_name }}"
+          else
+            TITLE="${{ github.ref_name }}: $SUBTITLE"
+          fi
+
+          strip() { sed -E 's/^- [a-z]+(\([^)]*\))?: /- /'; }
+
+          NOTES=/tmp/release-notes.md
+          :> "$NOTES"
+
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${{ github.ref_name }}"
+          else
+            RANGE="${{ github.ref_name }}"
+          fi
+
+          ADDED=$(git log --pretty=format:"- %s" $RANGE --grep="^feat" -E 2>/dev/null | strip || true)
+          if [ -n "$ADDED" ]; then
+            { echo "### Added"; echo "$ADDED"; echo ""; } >> "$NOTES"
+          fi
+
+          FIXED=$(git log --pretty=format:"- %s" $RANGE --grep="^fix" -E 2>/dev/null | strip || true)
+          if [ -n "$FIXED" ]; then
+            { echo "### Fixed"; echo "$FIXED"; echo ""; } >> "$NOTES"
+          fi
+
+          CHANGED=$(git log --pretty=format:"- %s" $RANGE | grep -E '^- (chore|docs|ci|refactor|style|test|perf|revert|build)(\(.+\))?:' | strip || true)
+          if [ -n "$CHANGED" ]; then
+            { echo "### Changed"; echo "$CHANGED"; echo ""; } >> "$NOTES"
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${{ github.ref_name }}" >> "$NOTES"
+          fi
+
+          gh release create ${{ github.ref_name }} \
+            --title "$TITLE" \
+            --notes-file "$NOTES"

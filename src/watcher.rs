@@ -13,6 +13,7 @@ use std::time::Duration;
 /// `sound_file` on success, and pushes status lines to `event_sender`.
 ///
 /// Pass `running` to signal stop; the watcher loop checks this flag.
+#[allow(clippy::too_many_arguments)]
 pub fn start(
     source_dir: PathBuf,
     dest_dir: PathBuf,
@@ -161,11 +162,7 @@ pub fn start(
                     log("Done.");
                 }
                 Err(e) => {
-                    log(&format!(
-                        "Failed to extract '{}': {}",
-                        path.display(),
-                        e
-                    ));
+                    log(&format!("Failed to extract '{}': {}", path.display(), e));
                 }
             }
         }
@@ -176,11 +173,9 @@ pub fn start(
 
 /// Extract a zip archive to `dest_dir`. Returns the number of files extracted.
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<usize, String> {
-    let file = fs::File::open(zip_path)
-        .map_err(|e| format!("cannot open zip: {}", e))?;
+    let file = fs::File::open(zip_path).map_err(|e| format!("cannot open zip: {}", e))?;
 
-    let mut archive =
-        zip::ZipArchive::new(file).map_err(|e| format!("cannot read zip: {}", e))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("cannot read zip: {}", e))?;
 
     let mut count = 0;
 

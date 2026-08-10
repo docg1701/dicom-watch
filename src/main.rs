@@ -325,7 +325,11 @@ impl AppState {
         ]
         .align_y(Alignment::Center);
 
-        let watch_btn_label = if self.watching { "⏹ Stop" } else { "▶ Watch" };
+        let watch_btn_label = if self.watching {
+            "⏹ Stop"
+        } else {
+            "▶ Watch"
+        };
         let watch_btn = button(text(watch_btn_label).size(14))
             .padding([8, 20])
             .on_press(Message::WatchToggled);
@@ -336,8 +340,7 @@ impl AppState {
             .on_press(Message::DeleteAll);
 
         let buttons_row =
-            row![watch_btn, Space::new().width(10), delete_btn]
-                .align_y(Alignment::Center);
+            row![watch_btn, Space::new().width(10), delete_btn].align_y(Alignment::Center);
 
         // ---- Settings ----
         let mode_pick = pick_list(
@@ -415,13 +418,8 @@ impl AppState {
             .map(|line| text(line).size(12).into())
             .collect();
 
-        let log_area = scrollable(
-            column(log_lines)
-                .spacing(1)
-                .padding(6)
-                .width(Length::Fill),
-        )
-        .height(Length::Fill);
+        let log_area = scrollable(column(log_lines).spacing(1).padding(6).width(Length::Fill))
+            .height(Length::Fill);
 
         let log_header = text("Activity Log").size(16);
 
@@ -438,20 +436,15 @@ impl AppState {
         .width(Length::FillPortion(2))
         .spacing(4);
 
-        let right_panel =
-            column![log_header, Space::new().height(6), log_area]
-                .width(Length::FillPortion(3))
-                .spacing(4)
-                .height(Length::Fill);
+        let right_panel = column![log_header, Space::new().height(6), log_area]
+            .width(Length::FillPortion(3))
+            .spacing(4)
+            .height(Length::Fill);
 
         container(
-            row![
-                left_panel,
-                Space::new().width(16),
-                right_panel
-            ]
-            .padding(16)
-            .height(Length::Fill),
+            row![left_panel, Space::new().width(16), right_panel]
+                .padding(16)
+                .height(Length::Fill),
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -485,15 +478,6 @@ impl std::fmt::Display for FilterMode {
         match self {
             FilterMode::Glob => write!(f, "glob"),
             FilterMode::Regex => write!(f, "regex"),
-        }
-    }
-}
-
-impl FilterMode {
-    fn to_string(&self) -> String {
-        match self {
-            FilterMode::Glob => "glob".into(),
-            FilterMode::Regex => "regex".into(),
         }
     }
 }
