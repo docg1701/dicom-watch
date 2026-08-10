@@ -1,7 +1,8 @@
 [package]
 name = "dicom-watch"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
 iced = { version = "0.14", default-features = false, features = ["wgpu", "image", "svg", "x11", "wayland", "thread-pool"] }
@@ -24,3 +25,6 @@ strip = true
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["playsoundapi", "winuser"] }
+
+[build-dependencies]
+winres = "0.1"

@@ -237,6 +237,10 @@ fn main() -> iced::Result {
         AppState::update,
         AppState::view,
     )
+    .window(iced::window::Settings {
+        icon: iced::window::icon::from_file_data(include_bytes!("../assets/icon.png"), None).ok(),
+        ..Default::default()
+    })
     .title(TITLE)
     .subscription(AppState::subscription)
     .window_size((750.0, 700.0))
