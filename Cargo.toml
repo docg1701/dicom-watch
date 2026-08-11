@@ -15,7 +15,7 @@ glob = "0.3"
 chrono = "0.4"
 rfd = "0.17.2"
 rust-i18n = "4"
-tray-icon = "0.19"
+tray-icon = { version = "0.19", default-features = false }
 image = "0.25"
 
 [profile.release]
