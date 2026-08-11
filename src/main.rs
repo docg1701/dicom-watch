@@ -17,9 +17,16 @@ use iced::window;
 use iced::{Alignment, Element, Font, Length, Subscription, Task};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 
+// Tray menu item IDs set once at startup, read by subscription.
+static TRAY_IDS: OnceLock<(String, String, String, String)> = OnceLock::new();
+
 const TITLE: &str = concat!("DicomWatch v", env!("CARGO_PKG_VERSION"));
+
+// Icon embedded at compile time for both window and tray.
+pub(crate) const ICON_PNG: &[u8] = include_bytes!("../assets/icon.png");
 
 const BOLD: Font = Font {
     weight: iced::font::Weight::Bold,
@@ -111,7 +118,12 @@ struct WatcherConfig {
 // ---------------------------------------------------------------------------
 
 #[derive(Hash, Clone)]
-struct TrayConfig;
+struct TrayPollConfig {
+    id_restore: String,
+    id_toggle: String,
+    id_delete: String,
+    id_quit: String,
+}
 
 // ---------------------------------------------------------------------------
 // Stop guard
@@ -228,13 +240,22 @@ fn build_watcher_stream(
         .boxed()
 }
 
-fn build_tray_stream(_config: &TrayConfig) -> iced::futures::stream::BoxStream<'static, Message> {
+fn build_tray_stream(
+    config: &TrayPollConfig,
+) -> iced::futures::stream::BoxStream<'static, Message> {
     let running = Arc::new(AtomicBool::new(true));
     let guard = StopGuard(running.clone());
 
     let (event_tx, event_rx) = iced::futures::channel::mpsc::unbounded::<TrayAction>();
 
-    tray::start(event_tx, running);
+    tray::start(
+        event_tx,
+        running,
+        config.id_restore.clone(),
+        config.id_toggle.clone(),
+        config.id_delete.clone(),
+        config.id_quit.clone(),
+    );
 
     use iced::futures::StreamExt;
     event_rx
@@ -279,6 +300,21 @@ fn main() -> iced::Result {
 
     iced::application(
         move || {
+            // Create system tray on the main thread, after the event
+            // loop has started (required by GTK on Linux and winit on
+            // Windows).
+            if config.tray.enabled {
+                match tray::build_tray() {
+                    Ok((tray, id_restore, id_toggle, id_delete, id_quit)) => {
+                        std::mem::forget(tray);
+                        let _ = TRAY_IDS.set((id_restore, id_toggle, id_delete, id_quit));
+                    }
+                    Err(e) => {
+                        eprintln!("DicomWatch: tray creation failed: {e}");
+                    }
+                }
+            }
+
             let filter_mode = config.filter.mode().unwrap_or(FilterMode::Glob);
             AppState {
                 exe_dir: exe_dir.clone(),
@@ -849,8 +885,18 @@ impl AppState {
             subs.push(iced::Subscription::run_with(config, build_watcher_stream));
         }
 
-        if self.tray_enabled {
-            subs.push(iced::Subscription::run_with(TrayConfig, build_tray_stream));
+        if self.tray_enabled
+            && let Some(ids) = TRAY_IDS.get()
+        {
+            subs.push(iced::Subscription::run_with(
+                TrayPollConfig {
+                    id_restore: ids.0.clone(),
+                    id_toggle: ids.1.clone(),
+                    id_delete: ids.2.clone(),
+                    id_quit: ids.3.clone(),
+                },
+                build_tray_stream,
+            ));
         }
 
         subs.push(close_request_subscription());
