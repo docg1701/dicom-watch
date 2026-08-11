@@ -32,7 +32,7 @@ src/
   main.rs      — State machine: AppState, Message, update(), view(), subscription()
   watcher.rs   — Background thread: notify watcher, zip extraction, sound playback
   config.rs    — Config load/validate/save, FilterMode enum, path resolution
-  tray.rs      — System tray: icon creation (main thread) + event polling (bg thread)
+  tray.rs      — System tray: platform bootstrap (GTK thread on Linux), icon + menu creation, event polling (bg thread)
 locales/
   en.toml      — English translations (all UI strings)
   pt-BR.toml   — Brazilian Portuguese translations
@@ -49,8 +49,7 @@ assets/
   delete.wav          — Delete-all sound (WAV, cross-platform)
 config.toml.example   — Documented template; user copies to config.toml
 docs/
-  ARCHITECTURE.md     — This file
-  TRAY-REPORT.md      — Tray implementation postmortem (v0.9.0–v0.9.6)
+  architecture.md     — This file
   regex-guide.md      — User-facing regex documentation
 ```
 
@@ -61,7 +60,7 @@ docs/
 | `main.rs` | GUI state, layout, message routing, startup, subscription orchestration |
 | `watcher.rs` | Background thread: fs events, zip extraction, sound playback |
 | `config.rs` | TOML parsing, validation, path resolution, struct definitions |
-| `tray.rs` | System tray: icon creation (called from main thread), event polling (background thread) |
+| `tray.rs` | System tray: platform bootstrap, icon + menu creation, event polling (background thread) |
 
 Each file is self-contained. `watcher.rs` has no idea about Iced widgets.
 `tray.rs` has no idea about the watcher. The only coupling is through
@@ -185,53 +184,64 @@ loop exits. Zero `JoinHandle::abort()`.
 
 ---
 
-## 5. System tray architecture (v0.9.x, current)
+## 5. System tray architecture (v0.9.9)
 
-The tray has a **two-phase lifecycle** due to platform requirements (GTK on
-Linux and Win32 on Windows require the event loop to be running on the thread
-that creates the tray icon):
+The tray has **three threads** on Linux, two on Windows:
 
-### Phase 1: Icon creation (main thread)
+### Phase 1: Platform bootstrap (`init_tray`)
 
-Happens in the `iced::application()` init closure — after the winit event loop
-initializes, before the first frame:
+Called from the `iced::application()` init closure:
 
 ```rust
 iced::application(move || {
     if config.tray.enabled {
-        #[cfg(target_os = "linux")]
-        gtk::init().ok();
-        let (tray, ids...) = tray::build_tray()?;
-        std::mem::forget(tray);  // leak for process lifetime
-        TRAY_IDS.set(ids).ok();
+        match tray::init_tray() {
+            Ok(ids) => { let _ = TRAY_IDS.set(ids); }
+            Err(e) => eprintln!("DicomWatch: tray creation failed: {e}");
+        }
     }
     AppState { ... }
 })
 ```
 
-`tray::build_tray()` decodes the embedded `icon.png` (via `include_bytes!`),
-builds the context menu (Restore, Start/Stop, Delete All, Quit), and creates
-the tray icon via `tray_icon::TrayIconBuilder`. Menu item IDs are stored in a
-`static OnceLock` for the event polling thread.
+**Linux** (`#[cfg(target_os = "linux")]`): `init_tray()` spawns a dedicated
+GTK thread. `tray-icon` requires a GTK event loop on the creation thread —
+without it, D-Bus messages never dispatch and the icon never appears. The
+thread calls `gtk::init()`, creates the tray + menu via `build_tray()`, leaks
+the tray handle, sends menu item IDs back through a `std::sync::mpsc::channel`,
+then blocks on `gtk::main()` for the process lifetime.
 
-### Phase 2: Event polling (background thread)
+**Windows** (`#[cfg(not(target_os = "linux"))]`): creates the tray directly
+on the calling thread. Win32 tray messages are pumped by winit's event loop.
+
+### Phase 2: Icon + menu creation (`build_tray`, private)
+
+Decodes the embedded `icon.png` (via `include_bytes!`) to RGBA, builds the
+context menu using localized strings from `t!("tray_menu.*")`, and creates
+the tray icon via `tray_icon::TrayIconBuilder`:
+
+- **Restore** — `t!("tray_menu.restore")`
+- **Start/Stop Watching** — `t!("tray_menu.toggle_watch")`
+- **Delete All Files** — `t!("tray_menu.delete_all")`
+- **Quit** — `t!("tray_menu.quit")`
+
+Menu item IDs are stored in a `static OnceLock` for the event polling thread.
+
+### Phase 3: Event polling (`start`, background thread)
 
 A subscription spawns a thread that polls `TrayIconEvent::receiver()` and
 `MenuEvent::receiver()` every 200ms. Events are forwarded as `TrayAction`
 variants to the GUI via `UnboundedSender`.
 
-**Subscriptions used:**
-- `window::close_requests()` — intercepts X button: if tray enabled → hide
-  window (`Mode::Hidden`), else → quit.
-- Tray polling subscription — forwards clicks and menu selections.
-- Existing watcher subscription — unchanged.
+### Close interception
 
-### Known issue
+`window::Settings::exit_on_close_request` is set to `false`. The
+`window::close_requests()` subscription fires on X button click:
+- `tray_enabled == true` → `window::set_mode(id, Mode::Hidden)` — hide, don't quit.
+- `tray_enabled == false` → `window::close(id)` — quit.
 
-The tray icon does not appear on Linux Mint Cinnamon as of v0.9.6. The
-`tray-icon` crate requires a running GTK event loop on the creation thread.
-The init closure may fire before the loop pumps. For full analysis, see
-`docs/TRAY-REPORT.md`.
+The "Quit" tray menu item calls `window::close(id)` directly, which exits
+the app regardless of the setting.
 
 ---
 
@@ -243,7 +253,7 @@ The init closure may fire before the loop pumps. For full analysis, see
 
 - `watcher.rs` — sound playback (`paplay`/`aplay` on Unix, `PlaySoundW` on Windows)
 - `watcher.rs` — Unix file permissions on extracted entries
-- `main.rs` — `gtk::init()` on Linux before tray creation
+- `tray.rs` — `gtk::init()` + `gtk::main()` on Linux in a dedicated thread
 - `build.rs` — Windows `.ico` embedding
 
 ### 6.2 Sound playback
