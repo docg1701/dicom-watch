@@ -28,6 +28,11 @@ enabled = true
 # system's audio player (paplay or aplay).
 file = "alarm-001.ogg"
 
+[delete_sound]
+# Whether to play a sound when clearing all files with the Delete button.
+enabled = false
+file = "/usr/share/mint-artwork/sounds/unmaximize.oga"
+
 [locale]
 # UI language: "en" for English, "pt-BR" for Português (Brasil).
 language = "en"

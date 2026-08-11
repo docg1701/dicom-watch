@@ -4,8 +4,6 @@
 // ponytail: single thread for tray events, no channel backpressure needed
 // because the rate of tray events is human-scale (1 per click).
 
-use image::ImageReader;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -17,30 +15,25 @@ use tray_icon::{
 
 use super::TrayAction;
 
+// Icon embedded at compile time — same bytes as the main window icon.
+const ICON_PNG: &[u8] = include_bytes!("../assets/icon.png");
+
 pub fn start(
-    icon_path: PathBuf,
     action_sender: iced::futures::channel::mpsc::UnboundedSender<TrayAction>,
     running: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
-        // GTK must be initialized before creating the tray icon on Linux.
-        // iced/winit already calls it on the main thread, but we are in
-        // a background thread — gtk::init is idempotent.
         #[cfg(target_os = "linux")]
         if let Err(e) = gtk::init() {
             eprintln!("tray: gtk::init failed: {e}");
             return;
         }
 
-        // --- Load icon (RGBA from PNG) ---
-        let icon = match load_icon(&icon_path) {
+        // Decode embedded PNG → RGBA for tray_icon.
+        let icon = match load_icon_from_bytes(ICON_PNG) {
             Ok(ic) => ic,
             Err(e) => {
-                let _ = action_sender.unbounded_send(TrayAction::Click);
-                eprintln!(
-                    "tray: failed to load icon at '{}': {e}",
-                    icon_path.display()
-                );
+                eprintln!("tray: failed to decode embedded icon: {e}");
                 return;
             }
         };
@@ -59,7 +52,6 @@ pub fn start(
         let id_quit = quit.id();
 
         if let Err(e) = menu.append_items(&[&restore, &toggle, &delete, &quit]) {
-            let _ = action_sender.unbounded_send(TrayAction::Click);
             eprintln!("tray: failed to build menu: {e}");
             return;
         }
@@ -74,7 +66,6 @@ pub fn start(
         {
             Ok(t) => t,
             Err(e) => {
-                let _ = action_sender.unbounded_send(TrayAction::Click);
                 eprintln!("tray: failed to create tray icon: {e}");
                 return;
             }
@@ -117,9 +108,10 @@ pub fn start(
     });
 }
 
-fn load_icon(path: &std::path::Path) -> Result<tray_icon::Icon, String> {
-    let img = ImageReader::open(path)
-        .map_err(|e| format!("cannot open icon: {e}"))?
+fn load_icon_from_bytes(bytes: &[u8]) -> Result<tray_icon::Icon, String> {
+    let img = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|e| format!("cannot guess image format: {e}"))?
         .decode()
         .map_err(|e| format!("cannot decode icon: {e}"))?
         .to_rgba8();

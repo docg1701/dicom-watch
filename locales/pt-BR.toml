@@ -15,7 +15,8 @@ source_dir = "Diretório origem"
 dest_dir = "Diretório destino"
 filter_mode = "Modo de filtro"
 pattern = "Padrão"
-sound_alert = "Alerta sonoro"
+sound_alert = "Alerta ao processar"
+delete_sound_alert = "Alerta ao limpar"
 
 [placeholder]
 source_dir = "/caminho/para/origem"
@@ -38,6 +39,7 @@ source_missing = "Diretório origem não existe: %{path}"
 dest_missing = "Diretório destino não existe: %{path}"
 regex_invalid = "Regex inválida: %{error}"
 sound_missing = "Arquivo de som não encontrado: %{path}"
+delete_sound_missing = "Arquivo de som de exclusão não encontrado: %{path}"
 
 [tray]
 setting = "Minimizar para a bandeja"

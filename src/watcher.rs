@@ -227,7 +227,7 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<usize, String> {
 
 /// Play an audio file.
 #[cfg(unix)]
-fn play_sound(path: &Path) {
+pub fn play_sound(path: &Path) {
     let path_copy = path.to_path_buf();
     std::thread::spawn(move || {
         let path_str = path_copy.to_string_lossy().to_string();
@@ -247,7 +247,7 @@ fn play_sound(path: &Path) {
 }
 
 #[cfg(windows)]
-fn play_sound(path: &Path) {
+pub fn play_sound(path: &Path) {
     use std::os::windows::ffi::OsStrExt;
     use winapi::um::playsoundapi::{PlaySoundW, SND_ASYNC, SND_FILENAME};
 

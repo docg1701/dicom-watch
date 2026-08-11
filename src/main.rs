@@ -40,6 +40,8 @@ struct AppState {
     filter_pattern: String,
     sound_enabled: bool,
     sound_file: String,
+    delete_sound_enabled: bool,
+    delete_sound_file: String,
 
     locale: String,
 
@@ -64,13 +66,17 @@ enum Message {
     FilterPatternChanged(String),
     SoundEnabledChanged(bool),
     SoundFileChanged(String),
+    DeleteSoundEnabledChanged(bool),
+    DeleteSoundFileChanged(String),
     LogLine(String),
     BrowseSourceDir,
     BrowseDestDir,
     BrowseSoundFile,
+    BrowseDeleteSoundFile,
     SourceDirPicked(Option<std::path::PathBuf>),
     DestDirPicked(Option<std::path::PathBuf>),
     SoundFilePicked(Option<std::path::PathBuf>),
+    DeleteSoundFilePicked(Option<std::path::PathBuf>),
     ToggleLocale,
     TrayEnabledChanged(bool),
     TrayEvent(TrayAction),
@@ -100,10 +106,12 @@ struct WatcherConfig {
     sound_file: PathBuf,
 }
 
+// ---------------------------------------------------------------------------
+// Tray subscription data
+// ---------------------------------------------------------------------------
+
 #[derive(Hash, Clone)]
-struct TrayConfig {
-    icon_path: PathBuf,
-}
+struct TrayConfig;
 
 // ---------------------------------------------------------------------------
 // Stop guard
@@ -134,6 +142,10 @@ fn save_config(state: &AppState) {
         sound: config::Sound {
             enabled: state.sound_enabled,
             file: state.sound_file.clone(),
+        },
+        delete_sound: config::DeleteSound {
+            enabled: state.delete_sound_enabled,
+            file: state.delete_sound_file.clone(),
         },
         locale: config::LocaleConfig {
             language: state.locale.clone(),
@@ -216,13 +228,13 @@ fn build_watcher_stream(
         .boxed()
 }
 
-fn build_tray_stream(config: &TrayConfig) -> iced::futures::stream::BoxStream<'static, Message> {
+fn build_tray_stream(_config: &TrayConfig) -> iced::futures::stream::BoxStream<'static, Message> {
     let running = Arc::new(AtomicBool::new(true));
     let guard = StopGuard(running.clone());
 
     let (event_tx, event_rx) = iced::futures::channel::mpsc::unbounded::<TrayAction>();
 
-    tray::start(config.icon_path.clone(), event_tx, running);
+    tray::start(event_tx, running);
 
     use iced::futures::StreamExt;
     event_rx
@@ -277,6 +289,8 @@ fn main() -> iced::Result {
                 filter_pattern: config.filter.pattern.clone(),
                 sound_enabled: config.sound.enabled,
                 sound_file: config.sound.file.clone(),
+                delete_sound_enabled: config.delete_sound.enabled,
+                delete_sound_file: config.delete_sound.file.clone(),
                 locale: config.locale.language.clone(),
                 watching: false,
                 tray_enabled: config.tray.enabled,
@@ -419,6 +433,16 @@ impl AppState {
                 },
                 Message::SoundFilePicked,
             ),
+            Message::BrowseDeleteSoundFile => Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .add_filter("Audio", &["ogg", "wav", "mp3", "flac", "oga"])
+                        .pick_file()
+                        .await
+                        .map(|h| h.path().to_path_buf())
+                },
+                Message::DeleteSoundFilePicked,
+            ),
             Message::SourceDirPicked(Some(path)) => {
                 self.source_dir = path.to_string_lossy().into_owned();
                 self.field_errors = validate_fields(self);
@@ -440,6 +464,27 @@ impl AppState {
                 Task::none()
             }
             Message::SoundFilePicked(None) => Task::none(),
+
+            Message::DeleteSoundEnabledChanged(v) => {
+                self.delete_sound_enabled = v;
+                self.field_errors = validate_fields(self);
+                save_config(self);
+                Task::none()
+            }
+            Message::DeleteSoundFileChanged(v) => {
+                self.delete_sound_file = v;
+                self.field_errors = validate_fields(self);
+                save_config(self);
+                Task::none()
+            }
+
+            Message::DeleteSoundFilePicked(Some(path)) => {
+                self.delete_sound_file = path.to_string_lossy().into_owned();
+                self.field_errors = validate_fields(self);
+                save_config(self);
+                Task::none()
+            }
+            Message::DeleteSoundFilePicked(None) => Task::none(),
 
             Message::TrayEnabledChanged(v) => {
                 self.tray_enabled = v;
@@ -478,6 +523,13 @@ impl AppState {
     }
 
     fn delete_all_files(&mut self) -> Task<Message> {
+        let play_sound = if self.delete_sound_enabled {
+            let path = resolve_path(&self.delete_sound_file, &self.exe_dir);
+            path.exists().then_some(path)
+        } else {
+            None
+        };
+
         let dest = std::path::Path::new(&self.dest_dir);
         match std::fs::read_dir(dest) {
             Ok(entries) => {
@@ -512,6 +564,9 @@ impl AppState {
                     e
                 ));
             }
+        }
+        if let Some(ref path) = play_sound {
+            watcher::play_sound(path);
         }
         Task::none()
     }
@@ -655,9 +710,35 @@ impl AppState {
                         .size(13)
                         .width(Length::Fill),
                     Space::new().width(6),
-                    button(text(browse_text).size(13).shaping(Shaping::Advanced))
-                        .padding([6, 14])
-                        .on_press(Message::BrowseSoundFile),
+                    button(
+                        text(browse_text.clone())
+                            .size(13)
+                            .shaping(Shaping::Advanced)
+                    )
+                    .padding([6, 14])
+                    .on_press(Message::BrowseSoundFile),
+                ]
+                .align_y(Alignment::Center),
+                Space::new().height(6),
+                row![
+                    toggler(self.delete_sound_enabled)
+                        .label(tr("field.delete_sound_alert"))
+                        .text_size(13)
+                        .on_toggle(Message::DeleteSoundEnabledChanged),
+                    Space::new().width(8),
+                    text_input(&tr("placeholder.sound_file"), &self.delete_sound_file)
+                        .on_input(Message::DeleteSoundFileChanged)
+                        .padding(6)
+                        .size(13)
+                        .width(Length::Fill),
+                    Space::new().width(6),
+                    button(
+                        text(browse_text.clone())
+                            .size(13)
+                            .shaping(Shaping::Advanced)
+                    )
+                    .padding([6, 14])
+                    .on_press(Message::BrowseDeleteSoundFile),
                 ]
                 .align_y(Alignment::Center),
                 Space::new().height(6),
@@ -767,10 +848,7 @@ impl AppState {
         }
 
         if self.tray_enabled {
-            let tray_config = TrayConfig {
-                icon_path: resolve_path("icon.png", &self.exe_dir),
-            };
-            subs.push(iced::Subscription::run_with(tray_config, build_tray_stream));
+            subs.push(iced::Subscription::run_with(TrayConfig, build_tray_stream));
         }
 
         subs.push(close_request_subscription());

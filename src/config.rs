@@ -6,6 +6,8 @@ pub struct Config {
     pub directories: Directories,
     pub filter: Filter,
     pub sound: Sound,
+    #[serde(default)]
+    pub delete_sound: DeleteSound,
     #[serde(default = "default_locale")]
     pub locale: LocaleConfig,
     #[serde(default)]
@@ -40,6 +42,18 @@ pub struct Filter {
 pub struct Sound {
     pub enabled: bool,
     pub file: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DeleteSound {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_delete_sound_file")]
+    pub file: String,
+}
+
+fn default_delete_sound_file() -> String {
+    "/usr/share/mint-artwork/sounds/unmaximize.oga".into()
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

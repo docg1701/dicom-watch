@@ -15,7 +15,8 @@ source_dir = "Source directory"
 dest_dir = "Destination directory"
 filter_mode = "Filter mode"
 pattern = "Pattern"
-sound_alert = "Sound alert"
+sound_alert = "Alert on processed"
+delete_sound_alert = "Alert on delete"
 
 [placeholder]
 source_dir = "/path/to/source"
@@ -38,6 +39,7 @@ source_missing = "Source directory does not exist: %{path}"
 dest_missing = "Destination directory does not exist: %{path}"
 regex_invalid = "Invalid regex: %{error}"
 sound_missing = "Sound file not found: %{path}"
+delete_sound_missing = "Delete sound file not found: %{path}"
 
 [tray]
 setting = "Minimize to system tray"
