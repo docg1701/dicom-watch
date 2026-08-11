@@ -338,6 +338,7 @@ fn main() -> iced::Result {
     )
     .window(iced::window::Settings {
         icon: iced::window::icon::from_file_data(include_bytes!("../assets/icon.png"), None).ok(),
+        exit_on_close_request: false,
         ..Default::default()
     })
     .title(TITLE)
