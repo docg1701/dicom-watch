@@ -30,8 +30,8 @@ cp "$BIN" /tmp/dicom-watch.exe
 zip -j "$ZIP" \
     /tmp/dicom-watch.exe \
     config.toml.example \
-    assets/alarm-001.wav \
-    assets/unmaximize.wav
+    assets/alarm.wav \
+    assets/delete.wav
 rm /tmp/dicom-watch.exe
 
 echo "==> Uploading $ZIP to GitHub Release $TAG..."

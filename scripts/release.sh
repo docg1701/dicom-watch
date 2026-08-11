@@ -33,8 +33,8 @@ zip -j "$ZIP" \
     scripts/install.sh \
     assets/icon.png \
     config.toml.example \
-    assets/alarm-001.wav \
-    assets/unmaximize.wav
+    assets/alarm.wav \
+    assets/delete.wav
 rm /tmp/dicom-watch
 
 echo "==> Uploading $ZIP to GitHub Release $TAG..."

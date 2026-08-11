@@ -46,7 +46,7 @@ Package and upload (Linux):
 
 Manual packaging (Windows):
 ```powershell
-# Create zip containing dicom-watch.exe + config.toml.example + alarm-001.ogg
+# Create zip containing dicom-watch.exe + config.toml.example + alarm.wav
 # Upload via gh release upload vX.Y.Z dicom-watch-vX.Y.Z-windows-x86_64.zip
 ```
 
@@ -84,8 +84,8 @@ as GitHub Release assets. A release is incomplete until both are uploaded.
 Steps 8-10 run on your Linux Mint machine. Step 7 is fully automatic — the
 release is created with changelog only (no binaries).
 
-Linux zip contains: `dicom-watch` + `install.sh` + `icon.png` + `config.toml.example` + `alarm-001.ogg`.
-Windows zip contains: `dicom-watch.exe` + `config.toml.example` + `alarm-001.ogg`.
+Linux zip contains: `dicom-watch` + `install.sh` + `icon.png` + `config.toml.example` + `alarm.wav`.
+Windows zip contains: `dicom-watch.exe` + `config.toml.example` + `alarm.wav`.
 
 ## Project structure
 

@@ -44,7 +44,7 @@ build.rs              — Windows: embed .ico into .exe via winres (no-op on Lin
 assets/
   icon.png            — 256×256 PNG (embedded at compile time via include_bytes!)
   icon.ico            — Multi-res Windows icon (16/32/48/256)
-  alarm-001.ogg       — Default notification sound
+  alarm.wav       — Default notification sound
 config.toml.example   — Documented template; user copies to config.toml
 ```
 
@@ -235,8 +235,8 @@ nothing crashes, nothing blocks.
 
 | Platform | Zip contents |
 |----------|-------------|
-| Linux | `dicom-watch` + `install.sh` + `icon.png` + `config.toml.example` + `alarm-001.ogg` |
-| Windows | `dicom-watch.exe` + `config.toml.example` + `alarm-001.ogg` |
+| Linux | `dicom-watch` + `install.sh` + `icon.png` + `config.toml.example` + `alarm.wav` |
+| Windows | `dicom-watch.exe` + `config.toml.example` + `alarm.wav` |
 
 The Linux binary is dynamically linked to system libs (glibc, X11, Wayland).
 The Windows binary is statically linked via `x86_64-pc-windows-gnu` — it's
@@ -312,7 +312,7 @@ pattern = "*.zip"
 
 [sound]
 enabled = true
-file = "alarm-001.ogg"
+file = "alarm.wav"
 
 [locale]
 language = "en"
@@ -354,7 +354,7 @@ pub fn resolve_path(path_str: &str, exe_dir: &Path) -> PathBuf {
 ```
 
 Relative paths are resolved against the directory containing the `.exe`. This
-allows the config to reference bundled files (like `alarm-001.ogg`) without
+allows the config to reference bundled files (like `alarm.wav`) without
 hardcoding install paths.
 
 ---

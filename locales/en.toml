@@ -22,7 +22,7 @@ delete_sound_alert = "Alert on delete"
 source_dir = "/path/to/source"
 dest_dir = "/path/to/destination"
 filter_pattern = "*.zip"
-sound_file = "alarm-001.ogg"
+sound_file = "alarm.wav"
 
 [section]
 settings = "Settings"
