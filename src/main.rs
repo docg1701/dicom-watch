@@ -270,6 +270,35 @@ fn close_request_subscription() -> Subscription<Message> {
     window::close_requests().map(Message::WindowCloseRequested)
 }
 
+fn browse_folder(dir: String, on_pick: fn(Option<PathBuf>) -> Message) -> Task<Message> {
+    Task::perform(
+        async move {
+            rfd::AsyncFileDialog::new()
+                .set_directory(&dir)
+                .pick_folder()
+                .await
+                .map(|h| h.path().to_path_buf())
+        },
+        on_pick,
+    )
+}
+
+fn browse_sound_file(
+    extensions: &'static [&'static str],
+    on_pick: fn(Option<PathBuf>) -> Message,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            rfd::AsyncFileDialog::new()
+                .add_filter("Audio", extensions)
+                .pick_file()
+                .await
+                .map(|h| h.path().to_path_buf())
+        },
+        on_pick,
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -362,6 +391,11 @@ fn tr(key: &str) -> String {
 // ---------------------------------------------------------------------------
 
 impl AppState {
+    fn after_field_edit(&mut self) {
+        self.field_errors = validate_fields(self);
+        save_config(self);
+    }
+
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ToggleLocale => {
@@ -390,38 +424,32 @@ impl AppState {
 
             Message::SourceDirChanged(v) => {
                 self.source_dir = v;
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::DestDirChanged(v) => {
                 self.dest_dir = v;
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::FilterModeChanged(mode) => {
                 self.filter_mode = mode;
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::FilterPatternChanged(v) => {
                 self.filter_pattern = v;
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::SoundEnabledChanged(v) => {
                 self.sound_enabled = v;
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::SoundFileChanged(v) => {
                 self.sound_file = v;
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
 
@@ -434,90 +462,49 @@ impl AppState {
             }
 
             Message::BrowseSourceDir => {
-                let dir = self.source_dir.clone();
-                Task::perform(
-                    async move {
-                        rfd::AsyncFileDialog::new()
-                            .set_directory(&dir)
-                            .pick_folder()
-                            .await
-                            .map(|h| h.path().to_path_buf())
-                    },
-                    Message::SourceDirPicked,
-                )
+                browse_folder(self.source_dir.clone(), Message::SourceDirPicked)
             }
-            Message::BrowseDestDir => {
-                let dir = self.dest_dir.clone();
-                Task::perform(
-                    async move {
-                        rfd::AsyncFileDialog::new()
-                            .set_directory(&dir)
-                            .pick_folder()
-                            .await
-                            .map(|h| h.path().to_path_buf())
-                    },
-                    Message::DestDirPicked,
-                )
+            Message::BrowseDestDir => browse_folder(self.dest_dir.clone(), Message::DestDirPicked),
+            Message::BrowseSoundFile => {
+                browse_sound_file(&["ogg", "wav", "mp3", "flac"], Message::SoundFilePicked)
             }
-            Message::BrowseSoundFile => Task::perform(
-                async {
-                    rfd::AsyncFileDialog::new()
-                        .add_filter("Audio", &["ogg", "wav", "mp3", "flac"])
-                        .pick_file()
-                        .await
-                        .map(|h| h.path().to_path_buf())
-                },
-                Message::SoundFilePicked,
-            ),
-            Message::BrowseDeleteSoundFile => Task::perform(
-                async {
-                    rfd::AsyncFileDialog::new()
-                        .add_filter("Audio", &["ogg", "wav", "mp3", "flac", "oga"])
-                        .pick_file()
-                        .await
-                        .map(|h| h.path().to_path_buf())
-                },
+            Message::BrowseDeleteSoundFile => browse_sound_file(
+                &["ogg", "wav", "mp3", "flac", "oga"],
                 Message::DeleteSoundFilePicked,
             ),
             Message::SourceDirPicked(Some(path)) => {
                 self.source_dir = path.to_string_lossy().into_owned();
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::SourceDirPicked(None) => Task::none(),
             Message::DestDirPicked(Some(path)) => {
                 self.dest_dir = path.to_string_lossy().into_owned();
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::DestDirPicked(None) => Task::none(),
             Message::SoundFilePicked(Some(path)) => {
                 self.sound_file = path.to_string_lossy().into_owned();
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::SoundFilePicked(None) => Task::none(),
 
             Message::DeleteSoundEnabledChanged(v) => {
                 self.delete_sound_enabled = v;
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::DeleteSoundFileChanged(v) => {
                 self.delete_sound_file = v;
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
 
             Message::DeleteSoundFilePicked(Some(path)) => {
                 self.delete_sound_file = path.to_string_lossy().into_owned();
-                self.field_errors = validate_fields(self);
-                save_config(self);
+                self.after_field_edit();
                 Task::none()
             }
             Message::DeleteSoundFilePicked(None) => Task::none(),

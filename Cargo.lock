@@ -900,7 +900,7 @@ dependencies = [
 
 [[package]]
 name = "dicom-watch"
-version = "0.9.9"
+version = "0.9.10"
 dependencies = [
  "chrono",
  "glob",
