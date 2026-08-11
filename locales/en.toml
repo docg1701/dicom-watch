@@ -31,9 +31,19 @@ activity_log = "Activity Log"
 waiting = "Waiting for files..."
 watching_start = "[Watch] Starting..."
 watcher_stopped = "Watcher stopped."
+tray_minimized = "Window hidden to system tray. Right-click tray icon to restore or quit."
 
 [error]
 source_missing = "Source directory does not exist: %{path}"
 dest_missing = "Destination directory does not exist: %{path}"
 regex_invalid = "Invalid regex: %{error}"
 sound_missing = "Sound file not found: %{path}"
+
+[tray]
+setting = "Minimize to system tray"
+
+[tray_menu]
+restore = "Restore"
+toggle_watch = "Start/Stop Watching"
+delete_all = "Delete All Files"
+quit = "Quit"

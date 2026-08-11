@@ -31,3 +31,10 @@ file = "alarm-001.ogg"
 [locale]
 # UI language: "en" for English, "pt-BR" for Português (Brasil).
 language = "en"
+
+[tray]
+# Whether to minimize the app to the system tray instead of closing.
+# When enabled, closing the window hides it. Right-click the tray
+# icon to restore the window, toggle watching, delete all files,
+# or quit the application.
+enabled = false

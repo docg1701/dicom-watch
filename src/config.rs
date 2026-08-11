@@ -8,6 +8,8 @@ pub struct Config {
     pub sound: Sound,
     #[serde(default = "default_locale")]
     pub locale: LocaleConfig,
+    #[serde(default)]
+    pub tray: TrayConfig,
 }
 
 fn default_locale() -> LocaleConfig {
@@ -38,6 +40,12 @@ pub struct Filter {
 pub struct Sound {
     pub enabled: bool,
     pub file: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct TrayConfig {
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

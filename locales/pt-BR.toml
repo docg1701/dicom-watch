@@ -31,9 +31,19 @@ activity_log = "Registro de Atividades"
 waiting = "Aguardando arquivos..."
 watching_start = "[Watch] Iniciando..."
 watcher_stopped = "Monitoramento parado."
+tray_minimized = "Janela minimizada para a bandeja. Clique com botão direito no ícone para restaurar ou sair."
 
 [error]
 source_missing = "Diretório origem não existe: %{path}"
 dest_missing = "Diretório destino não existe: %{path}"
 regex_invalid = "Regex inválida: %{error}"
 sound_missing = "Arquivo de som não encontrado: %{path}"
+
+[tray]
+setting = "Minimizar para a bandeja"
+
+[tray_menu]
+restore = "Restaurar"
+toggle_watch = "Iniciar/Parar Monitoramento"
+delete_all = "Limpar Todos os Arquivos"
+quit = "Sair"
