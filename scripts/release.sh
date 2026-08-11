@@ -33,7 +33,7 @@ zip -j "$ZIP" \
     scripts/install.sh \
     assets/icon.png \
     config.toml.example \
-    assets/alarm-001.ogg \
+    assets/alarm-001.wav \
     assets/unmaximize.wav
 rm /tmp/dicom-watch
 

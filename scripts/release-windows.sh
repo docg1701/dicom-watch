@@ -30,7 +30,7 @@ cp "$BIN" /tmp/dicom-watch.exe
 zip -j "$ZIP" \
     /tmp/dicom-watch.exe \
     config.toml.example \
-    assets/alarm-001.ogg \
+    assets/alarm-001.wav \
     assets/unmaximize.wav
 rm /tmp/dicom-watch.exe
 

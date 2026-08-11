@@ -26,7 +26,7 @@ pattern = "*.zip"
 enabled = true
 # Path to the audio file. OGG, WAV, and MP3 are typically supported by your
 # system's audio player (paplay or aplay).
-file = "alarm-001.ogg"
+file = "alarm-001.wav"
 
 [delete_sound]
 # Whether to play a sound when clearing all files with the Delete button.
