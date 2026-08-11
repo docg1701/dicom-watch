@@ -1,4 +1,5 @@
 mod config;
+mod tray;
 mod watcher;
 
 #[macro_use]
@@ -12,6 +13,7 @@ use iced::widget::text::Shaping;
 use iced::widget::{
     Space, button, column, container, pick_list, row, scrollable, text, text_input, toggler,
 };
+use iced::window;
 use iced::{Alignment, Element, Font, Length, Subscription, Task};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -42,6 +44,7 @@ struct AppState {
     locale: String,
 
     watching: bool,
+    tray_enabled: bool,
 
     log: Vec<String>,
     field_errors: Vec<String>,
@@ -69,6 +72,18 @@ enum Message {
     DestDirPicked(Option<std::path::PathBuf>),
     SoundFilePicked(Option<std::path::PathBuf>),
     ToggleLocale,
+    TrayEnabledChanged(bool),
+    TrayEvent(TrayAction),
+    WindowCloseRequested(iced::window::Id),
+}
+
+#[derive(Debug, Clone)]
+enum TrayAction {
+    Click,
+    MenuRestore,
+    MenuToggleWatch,
+    MenuDeleteAll,
+    MenuQuit,
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +98,11 @@ struct WatcherConfig {
     pattern: String,
     sound_enabled: bool,
     sound_file: PathBuf,
+}
+
+#[derive(Hash, Clone)]
+struct TrayConfig {
+    icon_path: PathBuf,
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +137,9 @@ fn save_config(state: &AppState) {
         },
         locale: config::LocaleConfig {
             language: state.locale.clone(),
+        },
+        tray: config::TrayConfig {
+            enabled: state.tray_enabled,
         },
     };
     let toml_str = toml::to_string_pretty(&config).unwrap_or_default();
@@ -193,6 +216,27 @@ fn build_watcher_stream(
         .boxed()
 }
 
+fn build_tray_stream(config: &TrayConfig) -> iced::futures::stream::BoxStream<'static, Message> {
+    let running = Arc::new(AtomicBool::new(true));
+    let guard = StopGuard(running.clone());
+
+    let (event_tx, event_rx) = iced::futures::channel::mpsc::unbounded::<TrayAction>();
+
+    tray::start(config.icon_path.clone(), event_tx, running);
+
+    use iced::futures::StreamExt;
+    event_rx
+        .map(move |action| {
+            let _hold = &guard;
+            Message::TrayEvent(action)
+        })
+        .boxed()
+}
+
+fn close_request_subscription() -> Subscription<Message> {
+    window::close_requests().map(Message::WindowCloseRequested)
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -235,6 +279,7 @@ fn main() -> iced::Result {
                 sound_file: config.sound.file.clone(),
                 locale: config.locale.language.clone(),
                 watching: false,
+                tray_enabled: config.tray.enabled,
                 log: Vec::new(),
                 field_errors: Vec::new(),
             }
@@ -291,44 +336,7 @@ impl AppState {
                 Task::none()
             }
 
-            Message::DeleteAll => {
-                let dest = std::path::Path::new(&self.dest_dir);
-                match std::fs::read_dir(dest) {
-                    Ok(entries) => {
-                        let mut removed = 0;
-                        for entry in entries.flatten() {
-                            let path = entry.path();
-                            let result = if path.is_dir() {
-                                std::fs::remove_dir_all(&path)
-                            } else {
-                                std::fs::remove_file(&path)
-                            };
-                            if result.is_ok() {
-                                removed += 1;
-                            } else if let Err(e) = result {
-                                self.log.push(format!(
-                                    "[Delete] Failed to remove '{}': {}",
-                                    path.display(),
-                                    e
-                                ));
-                            }
-                        }
-                        self.log.push(format!(
-                            "[Delete] Removed {} item(s) from '{}'.",
-                            removed,
-                            dest.display()
-                        ));
-                    }
-                    Err(e) => {
-                        self.log.push(format!(
-                            "[Delete] Cannot read directory '{}': {}",
-                            dest.display(),
-                            e
-                        ));
-                    }
-                }
-                Task::none()
-            }
+            Message::DeleteAll => self.delete_all_files(),
 
             Message::SourceDirChanged(v) => {
                 self.source_dir = v;
@@ -432,7 +440,80 @@ impl AppState {
                 Task::none()
             }
             Message::SoundFilePicked(None) => Task::none(),
+
+            Message::TrayEnabledChanged(v) => {
+                self.tray_enabled = v;
+                save_config(self);
+                Task::none()
+            }
+
+            Message::WindowCloseRequested(id) => {
+                if self.tray_enabled {
+                    self.log.push(tr("log.tray_minimized"));
+                    window::set_mode(id, iced::window::Mode::Hidden)
+                } else {
+                    window::close(id)
+                }
+            }
+
+            Message::TrayEvent(action) => match action {
+                TrayAction::Click | TrayAction::MenuRestore => iced::window::latest()
+                    .and_then(|id| window::set_mode(id, iced::window::Mode::Windowed)),
+                TrayAction::MenuToggleWatch => {
+                    if self.watching {
+                        self.watching = false;
+                    } else {
+                        self.field_errors = validate_fields(self);
+                        if self.field_errors.is_empty() {
+                            self.watching = true;
+                            self.log.push(tr("log.watching_start"));
+                        }
+                    }
+                    Task::none()
+                }
+                TrayAction::MenuDeleteAll => self.delete_all_files(),
+                TrayAction::MenuQuit => iced::window::latest().and_then(window::close),
+            },
         }
+    }
+
+    fn delete_all_files(&mut self) -> Task<Message> {
+        let dest = std::path::Path::new(&self.dest_dir);
+        match std::fs::read_dir(dest) {
+            Ok(entries) => {
+                let mut removed = 0;
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let result = if path.is_dir() {
+                        std::fs::remove_dir_all(&path)
+                    } else {
+                        std::fs::remove_file(&path)
+                    };
+                    if result.is_ok() {
+                        removed += 1;
+                    } else if let Err(e) = result {
+                        self.log.push(format!(
+                            "[Delete] Failed to remove '{}': {}",
+                            path.display(),
+                            e
+                        ));
+                    }
+                }
+                self.log.push(format!(
+                    "[Delete] Removed {} item(s) from '{}'.",
+                    removed,
+                    dest.display()
+                ));
+            }
+            Err(e) => {
+                self.log.push(format!(
+                    "[Delete] Cannot read directory '{}': {}",
+                    dest.display(),
+                    e
+                ));
+            }
+        }
+        Task::none()
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -579,6 +660,13 @@ impl AppState {
                         .on_press(Message::BrowseSoundFile),
                 ]
                 .align_y(Alignment::Center),
+                Space::new().height(6),
+                row![
+                    toggler(self.tray_enabled)
+                        .label(tr("tray.setting"))
+                        .text_size(13)
+                        .on_toggle(Message::TrayEnabledChanged),
+                ],
             ]
             .spacing(0),
         )
@@ -664,20 +752,30 @@ impl AppState {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        if !self.watching {
-            return Subscription::none();
+        let mut subs: Vec<Subscription<Message>> = Vec::new();
+
+        if self.watching {
+            let config = WatcherConfig {
+                source_dir: PathBuf::from(&self.source_dir),
+                dest_dir: PathBuf::from(&self.dest_dir),
+                filter_mode_str: self.filter_mode.to_string(),
+                pattern: self.filter_pattern.clone(),
+                sound_enabled: self.sound_enabled,
+                sound_file: resolve_path(&self.sound_file, &self.exe_dir),
+            };
+            subs.push(iced::Subscription::run_with(config, build_watcher_stream));
         }
 
-        let config = WatcherConfig {
-            source_dir: PathBuf::from(&self.source_dir),
-            dest_dir: PathBuf::from(&self.dest_dir),
-            filter_mode_str: self.filter_mode.to_string(),
-            pattern: self.filter_pattern.clone(),
-            sound_enabled: self.sound_enabled,
-            sound_file: resolve_path(&self.sound_file, &self.exe_dir),
-        };
+        if self.tray_enabled {
+            let tray_config = TrayConfig {
+                icon_path: resolve_path("icon.png", &self.exe_dir),
+            };
+            subs.push(iced::Subscription::run_with(tray_config, build_tray_stream));
+        }
 
-        iced::Subscription::run_with(config, build_watcher_stream)
+        subs.push(close_request_subscription());
+
+        Subscription::batch(subs)
     }
 }
 
