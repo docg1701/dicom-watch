@@ -2,7 +2,7 @@
 
 > Blueprint for building lightweight, cross-platform desktop apps with Rust.
 > Use this as a template for any file-watching, background-processing, or
-> system-tray-less desktop utility.
+> desktop utility.
 
 ---
 
@@ -14,14 +14,14 @@
 - **State machine GUI.** The GUI is a pure function of state (`view`), a pure
   state reducer (`update`), and a side-effect manager (`subscription`). This is
   the Elm Architecture, implemented by `iced`.
-- **Channels, never shared mutable state.** The watcher thread talks to the GUI
-  through a single `mpsc::unbounded` channel. No `Arc<Mutex<T>>` anywhere.
+- **Channels, never shared mutable state.** Background threads talk to the GUI
+  through `mpsc::unbounded` channels. No `Arc<Mutex<T>>` anywhere.
 - **Crash early, crash loud.** Config errors abort the process before the GUI
   opens, with human-readable messages in both `stderr` and a native OS dialog.
-  No silent defaults, no fallback values.
+  No silent defaults for filesystem paths.
 - **Portable by construction.** The same source compiles for Linux and Windows
-  with zero `#[cfg]` branching in business logic. Platform differences are
-  isolated to sound playback (two 5-line functions) and the build script.
+  with minimal `#[cfg]` branching. Platform differences are isolated to sound
+  playback and the build script.
 
 ---
 
@@ -32,6 +32,7 @@ src/
   main.rs      — State machine: AppState, Message, update(), view(), subscription()
   watcher.rs   — Background thread: notify watcher, zip extraction, sound playback
   config.rs    — Config load/validate/save, FilterMode enum, path resolution
+  tray.rs      — System tray: icon creation (main thread) + event polling (bg thread)
 locales/
   en.toml      — English translations (all UI strings)
   pt-BR.toml   — Brazilian Portuguese translations
@@ -44,22 +45,27 @@ build.rs              — Windows: embed .ico into .exe via winres (no-op on Lin
 assets/
   icon.png            — 256×256 PNG (embedded at compile time via include_bytes!)
   icon.ico            — Multi-res Windows icon (16/32/48/256)
-  alarm.wav       — Default notification sound
+  alarm.wav           — Notification sound (WAV, cross-platform)
+  delete.wav          — Delete-all sound (WAV, cross-platform)
 config.toml.example   — Documented template; user copies to config.toml
+docs/
+  ARCHITECTURE.md     — This file
+  TRAY-REPORT.md      — Tray implementation postmortem (v0.9.0–v0.9.6)
+  regex-guide.md      — User-facing regex documentation
 ```
 
-### Why 3 source files?
+### Module responsibilities
 
-| File | Lines | Responsibility |
-|------|-------|---------------|
-| `main.rs` | ~360 | GUI state, layout, message routing, startup |
-| `watcher.rs` | ~200 | Thread spawn, fs events, zip extraction, sound |
-| `config.rs` | ~120 | TOML parsing, validation, path resolution |
+| File | Responsibility |
+|------|---------------|
+| `main.rs` | GUI state, layout, message routing, startup, subscription orchestration |
+| `watcher.rs` | Background thread: fs events, zip extraction, sound playback |
+| `config.rs` | TOML parsing, validation, path resolution, struct definitions |
+| `tray.rs` | System tray: icon creation (called from main thread), event polling (background thread) |
 
-Each file is self-contained and under 500 lines. A developer reading
-`watcher.rs` never needs to open `main.rs` to understand what the watcher does.
-The only coupling is: `watcher::start()` takes an `UnboundedSender<String>` and
-sends log lines — it has no idea those lines end up in an Iced widget.
+Each file is self-contained. `watcher.rs` has no idea about Iced widgets.
+`tray.rs` has no idea about the watcher. The only coupling is through
+`UnboundedSender` channels carrying plain data.
 
 ---
 
@@ -76,230 +82,225 @@ User action → Message → update(&mut AppState, Message) → Task<Message>
                                    (background streams)
 ```
 
-Every user interaction (click, text input, file dialog result) produces a
-`Message` enum variant. `update()` pattern-matches it, mutates `AppState`, and
-optionally returns a `Task` for async work (file dialogs). `view()` takes a
-read-only `&AppState` and produces a widget tree — it never mutates state.
-
 ### 3.2 AppState — flat struct, no nesting
 
 ```rust
 struct AppState {
-    exe_dir: PathBuf,       // directory containing the binary
-    config_path: PathBuf,   // path to config.toml (next to binary)
-    source_dir: String,     // user-editable
+    exe_dir: PathBuf,
+    config_path: PathBuf,
+    source_dir: String,
     dest_dir: String,
     filter_mode: FilterMode,
     filter_pattern: String,
     sound_enabled: bool,
     sound_file: String,
-    locale: String,         // "en" or "pt-BR"
-    watching: bool,         // whether the watcher thread is active
-    log: Vec<String>,       // ring buffer, max ~200 lines
-    field_errors: Vec<String>, // validation errors shown in red
+    delete_sound_enabled: bool,
+    delete_sound_file: String,
+    locale: String,           // "en" or "pt-BR"
+    watching: bool,
+    tray_enabled: bool,       // minimize-to-tray toggle
+    log: Vec<String>,         // ring buffer, max ~200 lines
+    field_errors: Vec<String>,
 }
 ```
 
-All fields are owned `String`s — no lifetimes, no borrowed references from
-config. This keeps the struct `'static` and avoids fighting the borrow checker
-during state transitions.
+All fields are owned `String`s — no lifetimes, no borrowed references.
 
-### 3.3 Message — flat enum, one variant per action
+### 3.3 Message — flat enum
 
 ```rust
 enum Message {
-    WatchToggled,
-    DeleteAll,
-    SourceDirChanged(String),
-    DestDirChanged(String),
-    FilterModeChanged(FilterMode),
-    FilterPatternChanged(String),
-    SoundEnabledChanged(bool),
-    SoundFileChanged(String),
-    LogLine(String),                    // from watcher thread
-    BrowseSourceDir,                    // triggers Task::perform
-    BrowseDestDir,
-    BrowseSoundFile,
-    SourceDirPicked(Option<PathBuf>),   // result of Task::perform
-    DestDirPicked(Option<PathBuf>),
-    SoundFilePicked(Option<PathBuf>),
+    WatchToggled, DeleteAll,
+    SourceDirChanged(String), DestDirChanged(String),
+    FilterModeChanged(FilterMode), FilterPatternChanged(String),
+    SoundEnabledChanged(bool), SoundFileChanged(String),
+    DeleteSoundEnabledChanged(bool), DeleteSoundFileChanged(String),
+    LogLine(String),
+    BrowseSourceDir, BrowseDestDir, BrowseSoundFile, BrowseDeleteSoundFile,
+    SourceDirPicked(Option<PathBuf>), DestDirPicked(Option<PathBuf>),
+    SoundFilePicked(Option<PathBuf>), DeleteSoundFilePicked(Option<PathBuf>),
     ToggleLocale,
+    TrayEnabledChanged(bool),
+    TrayEvent(TrayAction),
+    WindowCloseRequested(iced::window::Id),
 }
 ```
 
 Three categories:
 - **User actions** → mutate state, re-validate, save config.
 - **Async results** (`*Picked`) → receive `PathBuf` from `rfd::AsyncFileDialog`.
-- **Thread messages** (`LogLine`) → push to log ring buffer.
+- **Thread messages** (`LogLine`, `TrayEvent`) → pushed from background subscriptions.
 
-### 3.4 Subscription — thread ↔ GUI bridge
+### 3.4 Subscription — composed via `Subscription::batch`
 
 ```rust
 fn subscription(&self) -> Subscription<Message> {
-    if !self.watching { return Subscription::none(); }
-    iced::Subscription::run_with(config, build_watcher_stream)
+    let mut subs = Vec::new();
+    // Watcher (only when watching)
+    if self.watching { subs.push(run_with(config, build_watcher_stream)); }
+    // Tray polling (only when tray enabled + icon created)
+    if self.tray_enabled && let Some(ids) = TRAY_IDS.get() { ... }
+    // Close interception (always)
+    subs.push(close_request_subscription());
+    Subscription::batch(subs)
 }
 ```
 
-`subscription()` is called by Iced whenever state changes. When `watching` is
-`true`, it spawns the watcher thread. When `watching` becomes `false`, Iced
-drops the old subscription, which drops the stream, which drops the
-`StopGuard`, which sets `AtomicBool` to `false` — the watcher loop exits.
-
-**This is the key pattern for thread lifecycle management.** No `thread::JoinHandle`,
-no `abort()`, no signal handling. The thread simply polls `AtomicBool` and the
-guard sets it on drop.
+Iced diffs subscriptions on every state change. Dropping a subscription drops
+its `StopGuard`, which signals the background thread to exit. No manual thread
+management.
 
 ---
 
 ## 4. Thread communication
 
-### 4.1 The channel
+### 4.1 Watcher → GUI
 
 ```rust
-// In build_watcher_stream():
-let (log_tx, log_rx) = iced::futures::channel::mpsc::unbounded::<String>();
-
-// Start the background thread
-watcher::start(src, dst, mode, pat, sound, file, log_tx, running_clone);
-
-// Map the rx stream into Iced Messages
-log_rx
-    .map(move |s| { let _hold = &guard; Message::LogLine(s) })
-    .boxed()
+let (log_tx, log_rx) = mpsc::unbounded::<String>();
+watcher::start(src, dst, mode, pat, sound, file, log_tx, running);
+log_rx.map(|s| Message::LogLine(s)).boxed()
 ```
 
-`watcher::start()` spawns `std::thread` and moves `log_tx` into it. The watcher
-never knows about Iced, Messages, or the GUI. It just calls
-`log_tx.unbounded_send(line)`.
+### 4.2 Tray → GUI
 
-### 4.2 Stop signal
+```rust
+let (event_tx, event_rx) = mpsc::unbounded::<TrayAction>();
+tray::start(event_tx, running, ids...);
+event_rx.map(|action| Message::TrayEvent(action)).boxed()
+```
+
+### 4.3 Stop signal
 
 ```rust
 struct StopGuard(Arc<AtomicBool>);
-impl Drop for StopGuard { ... }  // sets to false
+impl Drop for StopGuard {
+    fn drop(&mut self) { self.0.store(false, Ordering::Relaxed); }
+}
 ```
 
 The `StopGuard` is moved into the stream's closure. When Iced drops the
-subscription, the stream is dropped, the guard's `Drop` fires, and the
-`AtomicBool` flips to `false`. The watcher's `while running.load(...)` loop
-exits on next iteration.
-
-### 4.3 Why not async?
-
-The watcher uses `std::thread` + `std::sync::mpsc::channel` for filesystem
-events (`notify` crate is sync). Sound playback spawns a short-lived thread.
-This keeps the call stack simple: no `tokio`, no `async fn main`, no runtime
-choice. For a single-background-thread app, async adds complexity with zero
-benefit.
+subscription, the stream drops, the guard fires, the thread's `while running`
+loop exits. Zero `JoinHandle::abort()`.
 
 ---
 
-## 5. Cross-platform strategy
+## 5. System tray architecture (v0.9.x, current)
 
-### 5.1 Platform isolation
+The tray has a **two-phase lifecycle** due to platform requirements (GTK on
+Linux and Win32 on Windows require the event loop to be running on the thread
+that creates the tray icon):
 
-Only two places in the entire codebase have `#[cfg]`:
+### Phase 1: Icon creation (main thread)
 
-```rust
-// watcher.rs — sound playback
-#[cfg(unix)]
-fn play_sound(path: &Path) { /* try paplay, fallback to aplay */ }
-
-#[cfg(windows)]
-fn play_sound(path: &Path) { /* PlaySoundW via winapi */ }
-```
+Happens in the `iced::application()` init closure — after the winit event loop
+initializes, before the first frame:
 
 ```rust
-// watcher.rs — Unix file permissions on extracted files
-#[cfg(unix)]
-{ use std::os::unix::fs::PermissionsExt; ... }
+iced::application(move || {
+    if config.tray.enabled {
+        #[cfg(target_os = "linux")]
+        gtk::init().ok();
+        let (tray, ids...) = tray::build_tray()?;
+        std::mem::forget(tray);  // leak for process lifetime
+        TRAY_IDS.set(ids).ok();
+    }
+    AppState { ... }
+})
 ```
 
-```rust
-// build.rs — icon embedding
-if cfg!(windows) { winres::WindowsResource::new().set_icon(...).compile(); }
-```
+`tray::build_tray()` decodes the embedded `icon.png` (via `include_bytes!`),
+builds the context menu (Restore, Start/Stop, Delete All, Quit), and creates
+the tray icon via `tray_icon::TrayIconBuilder`. Menu item IDs are stored in a
+`static OnceLock` for the event polling thread.
 
-Everything else — GUI layout, config parsing, file watching, zip extraction,
-i18n — is identical on both platforms. The `iced` and `rfd` crates handle
-platform-native rendering and dialogs internally.
+### Phase 2: Event polling (background thread)
 
-### 5.2 Sound playback (Linux)
+A subscription spawns a thread that polls `TrayIconEvent::receiver()` and
+`MenuEvent::receiver()` every 200ms. Events are forwarded as `TrayAction`
+variants to the GUI via `UnboundedSender`.
 
-Tries `paplay` (PulseAudio) first, falls back to `aplay` (ALSA). Both are
-ubiquitous on Linux desktops. The thread is detached — if playback fails,
-nothing crashes, nothing blocks.
+**Subscriptions used:**
+- `window::close_requests()` — intercepts X button: if tray enabled → hide
+  window (`Mode::Hidden`), else → quit.
+- Tray polling subscription — forwards clicks and menu selections.
+- Existing watcher subscription — unchanged.
 
-### 5.3 Release packaging
+### Known issue
+
+The tray icon does not appear on Linux Mint Cinnamon as of v0.9.6. The
+`tray-icon` crate requires a running GTK event loop on the creation thread.
+The init closure may fire before the loop pumps. For full analysis, see
+`docs/TRAY-REPORT.md`.
+
+---
+
+## 6. Cross-platform strategy
+
+### 6.1 Platform isolation
+
+`#[cfg]` blocks exist only in:
+
+- `watcher.rs` — sound playback (`paplay`/`aplay` on Unix, `PlaySoundW` on Windows)
+- `watcher.rs` — Unix file permissions on extracted entries
+- `main.rs` — `gtk::init()` on Linux before tray creation
+- `build.rs` — Windows `.ico` embedding
+
+### 6.2 Sound playback
+
+All bundled sounds use **WAV format** — the only format that works on both
+Linux (`paplay`/`aplay`) and Windows (`PlaySoundW`).
+
+- `alarm.wav` — notification when a ZIP is extracted
+- `delete.wav` — notification when Delete All removes files (only if items were actually deleted)
+
+### 6.3 Release packaging
 
 | Platform | Zip contents |
 |----------|-------------|
-| Linux | `dicom-watch` + `install.sh` + `icon.png` + `config.toml.example` + `alarm.wav` |
-| Windows | `dicom-watch.exe` + `config.toml.example` + `alarm.wav` |
+| Linux | `dicom-watch` + `install.sh` + `icon.png` + `config.toml.example` + `alarm.wav` + `delete.wav` |
+| Windows | `dicom-watch.exe` + `config.toml.example` + `alarm.wav` + `delete.wav` |
 
-The Linux binary is dynamically linked to system libs (glibc, X11, Wayland).
-The Windows binary is statically linked via `x86_64-pc-windows-gnu` — it's
-a single `.exe` with no DLL dependencies.
+Linux binary is dynamically linked (glibc, X11, Wayland, GTK3).
+Windows binary is statically linked via `x86_64-pc-windows-gnu`.
 
 ---
 
-## 6. Internationalization (i18n)
+## 7. Internationalization (i18n)
 
-### 6.1 rust-i18n — compile-time embedded
+### 7.1 rust-i18n — compile-time embedded
 
 ```rust
 #[macro_use] extern crate rust_i18n;
 i18n!("locales");
 ```
 
-Translation files live in `locales/{en,pt-BR}.toml`. At compile time, the
-macro embeds them into the binary as static strings. No runtime file loading,
-no missing translation files at runtime.
-
-### 6.2 Usage
+Translation files in `locales/{en,pt-BR}.toml` are embedded into the binary at
+compile time. No runtime file loading. Switch at runtime:
 
 ```rust
-t!("button.start")          // returns &str at current locale
-t!("error.source_missing", path = "/foo")  // interpolation
+rust_i18n::set_locale("pt-BR");  // instant, no recompilation
 ```
 
-A convenience wrapper `fn tr(key: &str) -> String` converts `&str` to owned
-`String` for widget text.
-
-### 6.3 Switching at runtime
-
-```rust
-Message::ToggleLocale => {
-    let new = if self.locale == "en" { "pt-BR" } else { "en" };
-    rust_i18n::set_locale(new);
-    self.locale = new.into();
-}
-```
-
-`rust_i18n::set_locale()` switches the global locale. The next `view()` call
-re-renders all text. The choice is persisted to `config.toml`.
-
-### 6.4 Locale file structure
+### 7.2 Locale file structure
 
 ```toml
 [status]       # status.watching, status.idle
 [button]       # button.start, button.stop, button.clear_all, button.browse
-[field]        # field.source_dir, field.dest_dir, ...
+[field]        # field.source_dir, field.dest_dir, sound_alert, delete_sound_alert, ...
 [placeholder]  # placeholder values for text inputs
 [section]      # section.settings, section.activity_log
-[log]          # log.waiting, log.watching_start
-[error]        # error.source_missing, error.dest_missing, ...
+[log]          # log.waiting, log.watching_start, log.tray_minimized
+[error]        # error.source_missing, dest_missing, regex_invalid, sound_missing, delete_sound_missing
+[tray]         # tray.setting
+[tray_menu]    # tray_menu.restore, toggle_watch, delete_all, quit
 ```
-
-Flat namespacing by section. No nesting — `t!("section.field")` is as deep as
-it gets.
 
 ---
 
-## 7. Configuration system
+## 8. Configuration system
 
-### 7.1 TOML format — user-editable
+### 8.1 TOML format
 
 ```toml
 [directories]
@@ -314,157 +315,80 @@ pattern = "*.zip"
 enabled = true
 file = "alarm.wav"
 
+[delete_sound]
+enabled = true
+file = "delete.wav"
+
 [locale]
 language = "en"
+
+[tray]
+enabled = false
 ```
 
-### 7.2 Load → deserialize → validate → fail or ready
+### 8.2 Validation on startup
 
-```rust
-pub fn load_config(exe_dir: &Path) -> Result<Config, String> {
-    let config_path = exe_dir.join("config.toml");
-    // 1. Check file exists → human-readable error
-    // 2. Read to string → error with path
-    // 3. toml::from_str → error with syntax location
-    // 4. validate_config → check dirs exist, regex compiles, sound file found
-    Ok(config)
-}
-```
+- **Fail loud**: directories must exist, regex must compile, sound files must
+  exist if enabled.
+- **Opt-in with defaults**: `[tray]`, `[delete_sound]` use `#[serde(default)]`.
+  Absent = disabled, no crash. `[sound]` and `[directories]` are always required.
+- All errors go to `stderr` AND a native `rfd::MessageDialog` popup.
 
-Validation is exhaustive: every assumption is checked before the GUI opens. The
-user never sees a blank window followed by a crash — they get a native OS
-dialog explaining exactly what's wrong.
+### 8.3 Save on every change
 
-### 7.3 Config changes from GUI — save immediately
+No separate "Save" button. Every field change in the GUI immediately serializes
+`AppState` back to `config.toml` via `toml::to_string_pretty`.
 
-Every field change in the GUI calls `save_config(self)`, which serializes the
-current `AppState` back to `config.toml` via `toml::to_string_pretty`. The file
-is always in sync with the UI. No separate "Save" button.
-
-### 7.4 Path resolution
+### 8.4 Path resolution
 
 ```rust
 pub fn resolve_path(path_str: &str, exe_dir: &Path) -> PathBuf {
-    if Path::new(path_str).is_absolute() {
-        path_str.into()
-    } else {
-        exe_dir.join(path_str)
-    }
+    if Path::new(path_str).is_absolute() { path_str.into() }
+    else { exe_dir.join(path_str) }
 }
 ```
 
-Relative paths are resolved against the directory containing the `.exe`. This
-allows the config to reference bundled files (like `alarm.wav`) without
-hardcoding install paths.
+Relative paths (like `alarm.wav`) resolve against the directory containing the
+binary. No hardcoded install paths.
 
 ---
 
-## 8. Release pipeline
+## 9. Release pipeline
 
-### 8.1 CI (GitHub Actions)
+### 9.1 CI (GitHub Actions)
 
 | Trigger | Action |
 |---------|--------|
 | Push to `master` | `cargo fmt --check` |
-| Push tag `v*.*.*` | `cargo fmt --check`, then auto-create GitHub Release with changelog |
+| Push tag `v*.*.*` | `cargo fmt --check`, then auto-create GitHub Release |
 
-CI never compiles, never runs clippy, never runs tests. All of that is local.
+CI never compiles. All building, linting, and testing is local.
 
-### 8.2 Local release script
-
-```bash
-# Linux
-cargo build --release
-./scripts/release.sh v0.8.3
-  # → zip containing binary + install.sh + icon + config.example + sound
-  # → uploaded to GitHub Release via gh CLI
-
-# Windows (cross-compile from Linux)
-cargo build --release --target x86_64-pc-windows-gnu
-./scripts/release-windows.sh v0.8.3
-  # → zip containing .exe + config.example + sound
-  # → uploaded to GitHub Release via gh CLI
-```
-
-The release scripts use `zip -j` to flatten the archive (no directory
-structure inside) and `gh release upload --clobber` to attach to the
-CI-created release.
-
-### 8.3 Version workflow
+### 9.2 Version workflow
 
 ```
-bump Cargo.toml → cargo build (sync Cargo.lock) → commit → PR → merge
+bump Cargo.toml → cargo build (sync Cargo.lock) → commit → merge
 → git tag vX.Y.Z <sha> → git push origin vX.Y.Z
-→ CI creates release → build locally → upload both zips
+→ CI creates release → cargo build --release → release.sh → release-windows.sh
 ```
 
-Tag is **lightweight** (`git tag v0.8.3 <sha>`, never `-a`/`-m`). Annotated
-tags produce duplicated release titles in the CI integration.
+Tags are **lightweight** (`git tag v0.9.6 <sha>`, never `-a`/`-m`).
 
 ---
 
-## 9. Error handling patterns
+## 10. Error handling patterns
 
-### 9.1 Startup errors — crash with dialog
-
-```rust
-let config = match config::load_config(&exe_dir) {
-    Ok(c) => c,
-    Err(e) => {
-        eprintln!("DicomWatch: {}", e);
-        rfd::MessageDialog::new()
-            .set_title("DicomWatch")
-            .set_description(&e)
-            .set_level(rfd::MessageLevel::Error)
-            .show();
-        std::process::exit(1);
-    }
-};
-```
-
-Same message goes to `stderr` and a native OS dialog. The dialog blocks until
-OK is clicked, then the process exits. No GUI is created.
-
-### 9.2 Runtime field errors — red text, block Start
-
-```rust
-fn validate_fields(state: &AppState) -> Vec<String> {
-    // Returns list of human-readable errors
-    // Errors are shown as red text in the GUI
-    // If non-empty, WatchToggled refuses to start
-}
-```
-
-Fields re-validate on every keystroke. The user sees errors immediately, not on
-submit.
-
-### 9.3 Watcher errors — log and continue
-
-```rust
-// watcher.rs
-match extract_zip(&path, &dest_dir) {
-    Ok(count) => { log("Extracted..."); }
-    Err(e) => { log(&format!("Failed to extract: {}", e)); }
-}
-```
-
-The watcher never crashes. Extraction errors are logged and visible in the
-activity panel. The watcher continues watching for new files.
-
-### 9.4 Sound errors — silent fallback
-
-```rust
-if result.is_err() {
-    let _ = std::process::Command::new("aplay")...;  // fallback
-}
-```
-
-Sound playback failure is silent. A missing or broken audio system shouldn't
-block the app from doing its primary job.
+| Layer | Strategy |
+|-------|----------|
+| **Startup config** | Crash with `stderr` message + native OS dialog (`rfd::MessageDialog`) |
+| **Field validation** | Red error text in GUI on every keystroke; `Start` refuses if errors exist |
+| **Watcher** | Log errors and continue; extraction failure doesn't stop watching |
+| **Sound** | Fail silently — spawn and forget; missing audio system doesn't block the app |
+| **Tray** | Log error and continue without tray icon; app remains fully functional |
 
 ---
 
-## 10. Dependency rationale
+## 11. Dependency rationale
 
 | Crate | Why |
 |-------|-----|
@@ -477,19 +401,19 @@ block the app from doing its primary job.
 | `chrono` | Timestamps in log lines |
 | `rfd` 0.17 | Native file/folder picker dialogs + message dialogs |
 | `rust-i18n` 4 | Compile-time i18n, `set_locale` at runtime |
-| `winapi` (Win only) | `PlaySoundW` for audio, `MessageBoxW` for error dialog |
-| `winres` (build only) | Embed `.ico` in Windows `.exe` |
+| `tray-icon` 0.19 | Cross-platform system tray (GTK/AppIndicator on Linux, Win32 on Windows) |
+| `image` 0.25 | PNG → RGBA conversion for tray icon |
+| `gtk` 0.18 (Linux) | `gtk::init()` for tray on Linux |
+| `winapi` (Win) | `PlaySoundW` for audio |
+| `winres` (build) | Embed `.ico` in Windows `.exe` |
 
-No async runtime, no HTTP client, no database. The app does exactly one thing
-and the dependency list reflects that.
+No async runtime, no HTTP client, no database.
 
 ---
 
-## 11. Replication recipe
+## 12. Replication recipe
 
-To build a new app following this same architecture:
-
-### 11.1 Skeleton
+### 12.1 Skeleton
 
 ```
 src/
@@ -505,21 +429,22 @@ assets/
 config.toml.example
 ```
 
-### 11.2 Rules
+### 12.2 Rules
 
 1. **AppState is flat and owned.** No lifetimes, no borrowed config fields.
-2. **Message is a flat enum.** One variant per action. Async results get `*Picked` variants.
+2. **Message is a flat enum.** One variant per action.
 3. **Thread → GUI via `mpsc::unbounded`.** The thread knows nothing about the GUI.
 4. **Thread lifecycle via `AtomicBool` + `StopGuard`.** No `JoinHandle::abort()`.
-5. **Config is validated before the GUI opens.** Use `rfd::MessageDialog` for the error.
-6. **Platform differences are two `#[cfg]` blocks max.**
-7. **No async runtime unless you have 10+ concurrent IO streams.**
+5. **Config is validated before the GUI opens.** Crash with `rfd::MessageDialog`.
+6. **Platform differences in `#[cfg]` blocks, not in business logic.**
+7. **No async runtime** unless you have 10+ concurrent IO streams.
 8. **All strings in locale files.** Never hardcode user-visible text.
 9. **Save config on every field change.** No separate save button.
 10. **Release CI does format-check only.** Build + package is local.
-11. **Functions ≤ 30 lines.** Files ≤ 500 lines.
+11. **Functions ≤ 30 lines. Files ≤ 500 lines.**
+12. **All bundled audio files use WAV** for cross-platform compatibility.
 
-### 11.3 Cargo.toml template
+### 12.3 Cargo.toml template
 
 ```toml
 [package]
@@ -551,19 +476,14 @@ codegen-units = 1
 strip = true
 ```
 
-The release profile is tuned for binary size (`opt-level = "s"`) and single
-binary distribution (`lto`, `strip`).
-
 ---
 
-## 12. What this architecture avoids
+## 13. What this architecture avoids
 
-- **No `Arc<Mutex<T>>` in production code.** The `AtomicBool` stop flag is the
-  only shared mutable state.
-- **No async runtime.** `std::thread` for background work, `iced::Task` only
-  for file dialogs.
-- **No event bus, no pub/sub.** One channel, one direction.
-- **No widget library wrapping.** Styles are defined as two ~10-line functions.
-- **No CI build matrix.** Local-only compilation means no CI minutes consumed.
-- **No installer.** Linux: `.desktop` file script. Windows: portable `.exe`.
-- **No auto-updater.** The user copies a zip. KISS.
+- **No `Arc<Mutex<T>>` in production code.**
+- **No async runtime.**
+- **No event bus, no pub/sub.**
+- **No widget library wrapping.**
+- **No CI build matrix.**
+- **No installer.**
+- **No auto-updater.**
