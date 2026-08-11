@@ -2,6 +2,20 @@
 
 > Agent instruction set. Keep ≤200 lines. Update in the same PR that changes conventions.
 
+## Agent behavior — documentation freshness
+
+- **Before any development, bugfix, or review cycle**, run `SKILL:find-docs` to
+  refresh the agent's knowledge of the libraries and tools involved in that
+  cycle. Do not rely on training-data memory alone.
+- **If a code-related operation fails twice in a row**, stop and run
+  `SKILL:find-docs` before the next attempt. Do not retry blindly.
+- **If the agent is less than 90% certain** it can write the code from training
+  memory alone, run `SKILL:find-docs` first.
+- **When analyzing code**, account for the difference between the repository's
+  current (latest stable) version of each dependency and the version that was
+  current at the model's training cutoff. Prefer the repository's actual
+  version.
+
 ## Commands
 
 ```bash
