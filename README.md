@@ -13,9 +13,12 @@ DicomWatch monitors a source directory for incoming zip archives (DICOM studies)
 auto-extracts them to a destination folder, deletes the original archive, and
 plays a notification sound.
 
-Built with Iced for a native GTK-like GUI on X11
-and Wayland. Single binary, no runtime dependencies beyond what your Linux
-desktop already has.
+Built with Iced for a native GTK-like GUI on X11 and Wayland. Single binary,
+no runtime dependencies beyond what your Linux desktop already has.
+
+Minimizes to the system tray — close the window and it keeps watching.
+Right-click the tray icon to restore, toggle, delete all, or quit.
+Enable with `tray.enabled = true` in `config.toml`.
 
 ## Install
 
