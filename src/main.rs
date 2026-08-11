@@ -208,6 +208,11 @@ fn main() -> iced::Result {
         Ok(c) => c,
         Err(e) => {
             eprintln!("DicomWatch: {}", e);
+            rfd::MessageDialog::new()
+                .set_title("DicomWatch")
+                .set_description(&e)
+                .set_level(rfd::MessageLevel::Error)
+                .show();
             std::process::exit(1);
         }
     };
