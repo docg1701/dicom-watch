@@ -531,9 +531,9 @@ impl AppState {
         };
 
         let dest = std::path::Path::new(&self.dest_dir);
+        let mut removed = 0u32;
         match std::fs::read_dir(dest) {
             Ok(entries) => {
-                let mut removed = 0;
                 for entry in entries.flatten() {
                     let path = entry.path();
                     let result = if path.is_dir() {
@@ -565,7 +565,9 @@ impl AppState {
                 ));
             }
         }
-        if let Some(ref path) = play_sound {
+        if removed > 0
+            && let Some(ref path) = play_sound
+        {
             watcher::play_sound(path);
         }
         Task::none()

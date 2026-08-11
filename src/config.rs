@@ -48,12 +48,7 @@ pub struct Sound {
 pub struct DeleteSound {
     #[serde(default)]
     pub enabled: bool,
-    #[serde(default = "default_delete_sound_file")]
     pub file: String,
-}
-
-fn default_delete_sound_file() -> String {
-    "/usr/share/mint-artwork/sounds/unmaximize.oga".into()
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -173,6 +168,18 @@ fn validate_config(config: &Config, exe_dir: &Path) -> Result<(), String> {
             return Err(format!(
                 "Sound file not found:\n  {}\n\n\
                  Check sound.file in config.toml or disable sound (sound.enabled = false)",
+                sound_path.display()
+            ));
+        }
+    }
+
+    // Validate delete sound file if enabled
+    if config.delete_sound.enabled {
+        let sound_path = resolve_path(&config.delete_sound.file, exe_dir);
+        if !sound_path.exists() {
+            return Err(format!(
+                "Delete sound file not found:\n  {}\n\n\
+                 Check delete_sound.file in config.toml or disable delete_sound (delete_sound.enabled = false)",
                 sound_path.display()
             ));
         }

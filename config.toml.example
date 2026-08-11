@@ -30,8 +30,9 @@ file = "alarm-001.ogg"
 
 [delete_sound]
 # Whether to play a sound when clearing all files with the Delete button.
+# If enabled, file must point to a valid audio file.
 enabled = false
-file = "/usr/share/mint-artwork/sounds/unmaximize.oga"
+file = "unmaximize.wav"
 
 [locale]
 # UI language: "en" for English, "pt-BR" for Português (Brasil).
