@@ -128,10 +128,10 @@ fn build_tray() -> Result<(tray_icon::TrayIcon, String, String, String, String),
 
     let menu = tray_icon::menu::Menu::new();
 
-    let restore = tray_icon::menu::MenuItem::new("Restore", true, None);
-    let toggle = tray_icon::menu::MenuItem::new("Start/Stop Watching", true, None);
-    let delete = tray_icon::menu::MenuItem::new("Delete All Files", true, None);
-    let quit = tray_icon::menu::MenuItem::new("Quit", true, None);
+    let restore = tray_icon::menu::MenuItem::new(&t!("tray_menu.restore"), true, None);
+    let toggle = tray_icon::menu::MenuItem::new(&t!("tray_menu.toggle_watch"), true, None);
+    let delete = tray_icon::menu::MenuItem::new(&t!("tray_menu.delete_all"), true, None);
+    let quit = tray_icon::menu::MenuItem::new(&t!("tray_menu.quit"), true, None);
 
     let id_restore = restore.id().0.clone();
     let id_toggle = toggle.id().0.clone();
