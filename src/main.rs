@@ -304,6 +304,11 @@ fn main() -> iced::Result {
             // loop has started (required by GTK on Linux and winit on
             // Windows).
             if config.tray.enabled {
+                #[cfg(target_os = "linux")]
+                if let Err(e) = gtk::init() {
+                    eprintln!("DicomWatch: gtk::init failed: {e}");
+                }
+
                 match tray::build_tray() {
                     Ok((tray, id_restore, id_toggle, id_delete, id_quit)) => {
                         std::mem::forget(tray);
