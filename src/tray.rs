@@ -1,8 +1,14 @@
-// System tray icon event polling. Runs in a background thread.
-// The tray icon itself is created on the main thread in main.rs
-// because GTK requires it to be on the same thread as the event loop.
+// System tray icon.
 //
-// This module only polls TrayIconEvent and MenuEvent receivers.
+// build_tray() — creates the tray icon and menu (platform-agnostic).
+// init_tray()  — platform-specific bootstrap:
+//   Linux: spawns a dedicated GTK thread with its own event loop
+//          (gtk::main) because tray-icon requires a GTK event loop
+//          on the creation thread.
+//   Other: creates the tray on the calling thread (winit event loop
+//          suffices).
+// start()      — background thread that polls TrayIconEvent and
+//                MenuEvent receivers every 200ms.
 //
 // ponytail: single thread for tray events, no channel backpressure needed
 // because the rate of tray events is human-scale (1 per click).
@@ -75,9 +81,49 @@ pub fn icon_from_bytes(bytes: &[u8]) -> Result<tray_icon::Icon, String> {
     tray_icon::Icon::from_rgba(rgba, w, h).map_err(|e| format!("invalid icon: {e}"))
 }
 
+/// Platform-specific tray initialisation.
+///
+/// On Linux: spawns a dedicated GTK thread, creates the tray there,
+/// and runs gtk::main() — tray-icon requires a GTK event loop on the
+/// creation thread. Returns menu item IDs.
+///
+/// On other platforms: creates the tray on the calling thread.
+pub fn init_tray() -> Result<(String, String, String, String), String> {
+    #[cfg(target_os = "linux")]
+    {
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            if let Err(e) = gtk::init() {
+                let _ = ready_tx.send(Err(format!("gtk::init failed: {e}")));
+                return;
+            }
+            match build_tray() {
+                Ok((tray, id_restore, id_toggle, id_delete, id_quit)) => {
+                    // Leak tray so it lives for the process lifetime.
+                    let _tray = Box::leak(Box::new(tray));
+                    let _ = ready_tx.send(Ok((id_restore, id_toggle, id_delete, id_quit)));
+                    // Block — process GTK/D-Bus events until the process exits.
+                    gtk::main();
+                }
+                Err(e) => {
+                    let _ = ready_tx.send(Err(e));
+                }
+            }
+        });
+        ready_rx
+            .recv()
+            .map_err(|_| "tray thread panicked before sending IDs".to_string())?
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let (tray, id_restore, id_toggle, id_delete, id_quit) = build_tray()?;
+        std::mem::forget(tray);
+        Ok((id_restore, id_toggle, id_delete, id_quit))
+    }
+}
+
 /// Build the tray icon and return it along with the menu item IDs.
-/// Called once on the main thread before the Iced event loop.
-pub fn build_tray() -> Result<(tray_icon::TrayIcon, String, String, String, String), String> {
+fn build_tray() -> Result<(tray_icon::TrayIcon, String, String, String, String), String> {
     let icon = icon_from_bytes(crate::ICON_PNG)?;
 
     let menu = tray_icon::menu::Menu::new();
