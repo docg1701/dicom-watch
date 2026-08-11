@@ -23,9 +23,10 @@ pub fn start(
     running: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
-        // GTK must be initialized before creating the tray icon.
-        // On Linux, iced/winit already calls it on the main thread,
-        // but we are in a background thread — gtk::init is idempotent.
+        // GTK must be initialized before creating the tray icon on Linux.
+        // iced/winit already calls it on the main thread, but we are in
+        // a background thread — gtk::init is idempotent.
+        #[cfg(target_os = "linux")]
         if let Err(e) = gtk::init() {
             eprintln!("tray: gtk::init failed: {e}");
             return;
