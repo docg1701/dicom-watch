@@ -1,0 +1,5 @@
+Icon: desktop-magnifier.svg
+Source: obsidian-icon-theme by madmaxms (https://github.com/madmaxms/iconpack-obsidian)
+License: GPL-3.0 (https://www.gnu.org/licenses/gpl-3.0.html)
+
+This icon file is licensed under GPL-3.0. The rest of dicom-watch is MIT.

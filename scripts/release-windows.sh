@@ -30,6 +30,7 @@ cp "$BIN" /tmp/dicom-watch.exe
 zip -j "$ZIP" \
     /tmp/dicom-watch.exe \
     config.toml.example \
+    assets/LICENSE-Obsidian-icon.txt \
     assets/alarm.wav \
     assets/delete.wav
 rm /tmp/dicom-watch.exe

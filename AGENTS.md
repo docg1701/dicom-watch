@@ -98,8 +98,8 @@ as GitHub Release assets. A release is incomplete until both are uploaded.
 Steps 8-10 run on your Linux Mint machine. Step 7 is fully automatic — the
 release is created with changelog only (no binaries).
 
-Linux zip contains: `dicom-watch` + `install.sh` + `uninstall.sh` + `icon.png` + `config.toml.example` + `alarm.wav` + `delete.wav`.
-Windows zip contains: `dicom-watch.exe` + `config.toml.example` + `alarm.wav`.
+Linux zip contains: `dicom-watch` + `install.sh` + `uninstall.sh` + `icon.png` + `LICENSE-Obsidian-icon.txt` + `config.toml.example` + `alarm.wav` + `delete.wav`.
+Windows zip contains: `dicom-watch.exe` + `LICENSE-Obsidian-icon.txt` + `config.toml.example` + `alarm.wav` + `delete.wav`.
 
 ## Project structure
 
