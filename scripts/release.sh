@@ -31,6 +31,7 @@ chmod +x scripts/install.sh
 zip -j "$ZIP" \
     /tmp/dicom-watch \
     scripts/install.sh \
+    scripts/uninstall.sh \
     assets/icon.png \
     config.toml.example \
     assets/alarm.wav \
