@@ -1,6 +1,6 @@
 [package]
 name = "dicom-watch"
-version = "0.9.11"
+version = "0.10.0"
 edition = "2024"
 build = "build.rs"
 
